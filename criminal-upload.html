@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Criminal - VigilAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-neutral-950 text-white">
+    <div class="max-w-lg mx-auto mt-20 p-8 bg-neutral-900 rounded-3xl">
+        <a href="/" class="text-cyan-400 mb-8 inline-block hover:text-cyan-300">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Back to Dashboard
+        </a>
+        <h1 class="text-3xl font-bold mb-8">Upload New Criminal</h1>
+
+        <div class="mb-6">
+            <label class="block text-sm text-neutral-400 mb-2">Full Name *</label>
+            <input id="name" type="text" placeholder="Enter full name"
+                   class="w-full bg-neutral-800 rounded-2xl px-6 py-5 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+        </div>
+        <div class="mb-6">
+            <label class="block text-sm text-neutral-400 mb-2">Description / Notes</label>
+            <textarea id="desc" placeholder="Enter description or notes"
+                      class="w-full bg-neutral-800 rounded-2xl px-6 py-5 h-32 focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
+        </div>
+        <div class="mb-6">
+            <label class="block text-sm text-neutral-400 mb-2">Photo *</label>
+            <div onclick="document.getElementById('file').click()"
+                 class="border-2 border-dashed border-neutral-700 rounded-2xl p-8 text-center cursor-pointer hover:border-cyan-500 transition">
+                <i class="fa-solid fa-cloud-arrow-up text-4xl text-neutral-500 mb-3"></i>
+                <p class="text-neutral-400">Click to select image</p>
+                <p id="file-name" class="text-cyan-400 mt-2 text-sm hidden"></p>
+            </div>
+            <input id="file" type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+        </div>
+        <div id="preview" class="mb-6 hidden">
+            <img id="preview-img" class="w-full h-48 object-cover rounded-2xl">
+        </div>
+
+        <button onclick="upload()" id="upload-btn"
+                class="w-full bg-cyan-500 text-black py-6 rounded-2xl font-semibold text-lg hover:bg-cyan-400 transition">
+            <i class="fa-solid fa-upload mr-2"></i> Upload Criminal Record
+        </button>
+
+        <div id="success-msg" class="hidden mt-6 bg-emerald-500/20 border border-emerald-500 text-emerald-400 p-4 rounded-2xl text-center font-semibold"></div>
+        <div id="error-msg" class="hidden mt-6 bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-2xl text-center font-semibold"></div>
+    </div>
+    <script>
+        const API = "http://127.0.0.1:8000";
+
+        function previewImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            document.getElementById("file-name").textContent = file.name;
+            document.getElementById("file-name").classList.remove("hidden");
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById("preview-img").src = e.target.result;
+                document.getElementById("preview").classList.remove("hidden");
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function upload() {
+            const name = document.getElementById("name").value.trim();
+            const desc = document.getElementById("desc").value.trim();
+            const file = document.getElementById("file").files[0];
+            const successMsg = document.getElementById("success-msg");
+            const errorMsg = document.getElementById("error-msg");
+            successMsg.classList.add("hidden");
+            errorMsg.classList.add("hidden");
+
+            if (!name || !file) {
+                errorMsg.textContent = "Name and image are required!";
+                errorMsg.classList.remove("hidden");
+                return;
+            }
+
+            const btn = document.getElementById("upload-btn");
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Uploading...';
+
+            const form = new FormData();
+            form.append("name", name);
+            form.append("description", desc);
+            form.append("file", file);
+
+            try {
+                const res = await fetch(API + "/criminals", { method: "POST", body: form });
+                if (res.ok) {
+                    successMsg.textContent = "Criminal record uploaded successfully!";
+                    successMsg.classList.remove("hidden");
+                    document.getElementById("name").value = "";
+                    document.getElementById("desc").value = "";
+                    document.getElementById("file").value = "";
+                    document.getElementById("file-name").classList.add("hidden");
+                    document.getElementById("preview").classList.add("hidden");
+                } else {
+                    const data = await res.json();
+                    errorMsg.textContent = data.detail || "Upload failed";
+                    errorMsg.classList.remove("hidden");
+                }
+            } catch (e) {
+                errorMsg.textContent = "Cannot connect to server. Is uvicorn running?";
+                errorMsg.classList.remove("hidden");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-upload mr-2"></i> Upload Criminal Record';
+            }
+        }
+    </script>
+</body>
+</html>

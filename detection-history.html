@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detection History - VigilAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-neutral-950 text-white">
+<div class="max-w-6xl mx-auto p-8">
+    <a href="/" class="inline-flex items-center gap-2 text-cyan-400 mb-10 hover:text-cyan-300">
+        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+    </a>
+    <h1 class="text-4xl font-bold mb-2">Detection History</h1>
+    <p class="text-neutral-500 mb-8">Screenshots from weapon alerts and face match log</p>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-8">
+        <button onclick="switchTab('screenshots')" id="tab-screenshots"
+                class="px-6 py-3 rounded-2xl font-semibold text-sm transition tab-active">
+            <i class="fa-solid fa-camera mr-2"></i>Screenshots
+            <span id="badge-screenshots" class="ml-2 bg-orange-500/20 text-orange-400 text-xs font-mono px-2 py-0.5 rounded-full">0</span>
+        </button>
+        <button onclick="switchTab('matches')" id="tab-matches"
+                class="px-6 py-3 rounded-2xl font-semibold text-sm transition tab-inactive">
+            <i class="fa-solid fa-face-viewfinder mr-2"></i>Face Matches
+            <span id="badge-matches" class="ml-2 bg-rose-500/20 text-rose-400 text-xs font-mono px-2 py-0.5 rounded-full">0</span>
+        </button>
+    </div>
+
+    <!-- Screenshots Panel -->
+    <div id="panel-screenshots">
+        <!-- Search / Filter bar -->
+        <div class="flex gap-4 mb-6 flex-wrap">
+            <div class="relative flex-1 min-w-48">
+                <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm"></i>
+                <input id="ss-search" type="text" placeholder="Search filename..."
+                       class="w-full bg-neutral-900 border border-neutral-700 rounded-2xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:border-cyan-500"
+                       oninput="filterScreenshots()">
+            </div>
+            <input id="ss-date" type="date"
+                   class="bg-neutral-900 border border-neutral-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                   onchange="filterScreenshots()">
+            <button onclick="clearFilters()"
+                    class="bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-5 py-3 rounded-2xl text-sm transition">
+                <i class="fa-solid fa-xmark mr-1"></i> Clear
+            </button>
+            <button onclick="loadScreenshots()"
+                    class="bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-3 rounded-2xl text-sm font-semibold transition">
+                <i class="fa-solid fa-refresh mr-1"></i> Refresh
+            </button>
+        </div>
+        <div id="ss-count" class="text-sm text-neutral-500 mb-4"></div>
+        <div id="history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+
+    <!-- Face Matches Panel -->
+    <div id="panel-matches" class="hidden">
+        <div class="flex gap-4 mb-6 flex-wrap">
+            <div class="relative flex-1 min-w-48">
+                <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm"></i>
+                <input id="m-search" type="text" placeholder="Search by name..."
+                       class="w-full bg-neutral-900 border border-neutral-700 rounded-2xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:border-cyan-500"
+                       oninput="filterMatches()">
+            </div>
+            <select id="m-conf" class="bg-neutral-900 border border-neutral-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" onchange="filterMatches()">
+                <option value="0">All Confidence</option>
+                <option value="0.7">70%+</option>
+                <option value="0.8">80%+</option>
+                <option value="0.9">90%+</option>
+            </select>
+            <button onclick="loadMatches()"
+                    class="bg-rose-600 hover:bg-rose-500 text-white px-5 py-3 rounded-2xl text-sm font-semibold transition">
+                <i class="fa-solid fa-refresh mr-1"></i> Refresh
+            </button>
+        </div>
+        <div id="m-count" class="text-sm text-neutral-500 mb-4"></div>
+        <div id="match-list"></div>
+    </div>
+</div>
+
+<style>
+    .tab-active  { background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: #06b6d4; }
+    .tab-inactive{ background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #64748b; }
+    .tab-inactive:hover { background: rgba(255,255,255,0.07); color: #94a3b8; }
+</style>
+
+<script>
+    const API = "http://127.0.0.1:8000";
+    let allScreenshots = [];
+    let allMatches = [];
+    let activeTab = "screenshots";
+
+    function switchTab(tab) {
+        activeTab = tab;
+        ["screenshots","matches"].forEach(t => {
+            document.getElementById("tab-" + t).className = "px-6 py-3 rounded-2xl font-semibold text-sm transition " + (t === tab ? "tab-active" : "tab-inactive");
+            document.getElementById("panel-" + t).classList.toggle("hidden", t !== tab);
+        });
+        if (tab === "screenshots") loadScreenshots();
+        else loadMatches();
+    }
+
+    // ─── Screenshots ─────────────────────────────────────────────────────
+    async function loadScreenshots() {
+        const container = document.getElementById("history-list");
+        container.innerHTML = '<p class="text-neutral-400 text-center py-12 col-span-full">Loading...</p>';
+        try {
+            const res = await fetch(API + "/screenshots");
+            if (!res.ok) throw new Error();
+            allScreenshots = await res.json();
+            document.getElementById("badge-screenshots").textContent = allScreenshots.length;
+            filterScreenshots();
+        } catch (err) {
+            container.innerHTML = '<p class="text-red-400 text-center py-12 col-span-full">Failed to load. Make sure the server is running.</p>';
+        }
+    }
+
+    function filterScreenshots() {
+        const term = document.getElementById("ss-search").value.toLowerCase().trim();
+        const dateVal = document.getElementById("ss-date").value;
+        let filtered = allScreenshots.filter(s => {
+            const matchName = !term || s.filename.toLowerCase().includes(term);
+            let matchDate = true;
+            if (dateVal) {
+                const ssDate = new Date(s.timestamp).toISOString().slice(0, 10);
+                matchDate = ssDate === dateVal;
+            }
+            return matchName && matchDate;
+        });
+        document.getElementById("ss-count").textContent = `Showing ${filtered.length} of ${allScreenshots.length} screenshots`;
+        renderScreenshots(filtered);
+    }
+
+    function renderScreenshots(screenshots) {
+        const container = document.getElementById("history-list");
+        if (screenshots.length === 0) {
+            container.innerHTML = '<p class="text-neutral-400 text-center py-12 col-span-full">No screenshots match the filter.</p>';
+            return;
+        }
+        container.innerHTML = screenshots.map(s => `
+            <div class="bg-neutral-900 rounded-3xl overflow-hidden group border border-neutral-800 hover:border-orange-500/30 transition-all">
+                <img src="${API}/screenshots/${s.filename}" class="w-full h-52 object-cover"
+                     onerror="this.src='https://via.placeholder.com/400x300/1a1a1a/555?text=Not+Found'">
+                <div class="p-5">
+                    <p class="text-sm text-neutral-400 mb-1"><i class="fa-regular fa-clock mr-1"></i>${new Date(s.timestamp).toLocaleString()}</p>
+                    <p class="text-neutral-600 text-xs mb-4 font-mono truncate">${s.filename}</p>
+                    <div class="flex gap-2">
+                        <a href="${API}/screenshots/${s.filename}" target="_blank"
+                           class="flex-1 bg-neutral-800 hover:bg-neutral-700 text-center py-2.5 rounded-2xl text-sm font-medium transition">
+                            <i class="fa-solid fa-eye mr-1"></i> View
+                        </a>
+                        <button onclick="deleteScreenshot('${s.filename}')"
+                                class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-2.5 rounded-2xl text-sm font-medium transition">
+                            <i class="fa-solid fa-trash mr-1"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>`).join('');
+    }
+
+    function clearFilters() {
+        document.getElementById("ss-search").value = "";
+        document.getElementById("ss-date").value = "";
+        filterScreenshots();
+    }
+
+    async function deleteScreenshot(filename) {
+        if (!confirm("Delete this screenshot?")) return;
+        try {
+            await fetch(API + `/screenshots/${filename}`, { method: "DELETE" });
+            loadScreenshots();
+        } catch (e) { alert("Failed to delete screenshot"); }
+    }
+
+    // ─── Face Matches ─────────────────────────────────────────────────────
+    async function loadMatches() {
+        document.getElementById("match-list").innerHTML = '<p class="text-neutral-400 text-center py-12">Loading match history...</p>';
+        try {
+            const res = await fetch(API + "/match-history");
+            if (!res.ok) throw new Error();
+            allMatches = await res.json();
+            document.getElementById("badge-matches").textContent = allMatches.length;
+            filterMatches();
+        } catch (err) {
+            document.getElementById("match-list").innerHTML = '<p class="text-red-400 text-center py-12">Failed to load match history.</p>';
+        }
+    }
+
+    function filterMatches() {
+        const term = document.getElementById("m-search").value.toLowerCase().trim();
+        const confMin = parseFloat(document.getElementById("m-conf").value) || 0;
+        let filtered = allMatches.filter(m => {
+            const matchName = !term || (m.name || '').toLowerCase().includes(term);
+            const matchConf = m.similarity >= confMin;
+            return matchName && matchConf;
+        });
+        document.getElementById("m-count").textContent = `Showing ${filtered.length} of ${allMatches.length} matches`;
+        renderMatches(filtered);
+    }
+
+    function renderMatches(matches) {
+        const container = document.getElementById("match-list");
+        if (matches.length === 0) {
+            container.innerHTML = '<p class="text-neutral-400 text-center py-12">No face matches recorded yet. Matches from Live Detection will appear here.</p>';
+            return;
+        }
+        container.innerHTML = `
+            <div class="space-y-3">
+                ${matches.map((m, i) => {
+                    const pct = (m.similarity * 100).toFixed(1);
+                    const pctN = parseFloat(pct);
+                    const barColor = pctN >= 90 ? "#ef4444" : pctN >= 80 ? "#f97316" : "#06b6d4";
+                    return `
+                    <div class="bg-neutral-900 border border-neutral-800 rounded-2xl px-6 py-4 flex items-center gap-5 hover:border-rose-500/30 transition">
+                        <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 flex-shrink-0 text-sm font-mono font-bold">${i+1}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-semibold text-lg">${m.name}</div>
+                            <div class="text-xs text-neutral-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i>${new Date(m.timestamp).toLocaleString()}</div>
+                            <div class="mt-2 bg-neutral-800 rounded-full h-1.5 w-full">
+                                <div class="h-1.5 rounded-full" style="width:${pct}%;background:${barColor};"></div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="font-mono text-2xl font-bold" style="color:${barColor}">${pct}%</div>
+                            <div class="text-xs text-neutral-500">similarity</div>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+    }
+
+    window.onload = () => {
+        loadScreenshots();
+        loadMatches();
+    };
+</script>
+</body>
+</html>

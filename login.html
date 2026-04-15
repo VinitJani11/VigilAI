@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - VigilAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-neutral-950 text-white">
+    <div class="min-h-screen flex items-center justify-center">
+        <div class="bg-neutral-900 rounded-3xl p-10 w-full max-w-md">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 bg-red-600 rounded-2xl flex items-center justify-center text-3xl">👁️</div>
+                <h1 class="text-3xl font-bold">VigilAI</h1>
+            </div>
+            <h2 class="text-4xl font-semibold mb-2">Login</h2>
+            <p class="text-neutral-400 mb-8">Access the full criminal & detection system</p>
+
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm text-neutral-400 mb-2">Username</label>
+                    <input id="username" type="text" value="admin" 
+                           class="w-full bg-neutral-800 rounded-2xl px-6 py-5 outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-neutral-400 mb-2">Password</label>
+                    <input id="password" type="password" value="vigilai123" 
+                           class="w-full bg-neutral-800 rounded-2xl px-6 py-5 outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+
+                <button onclick="login()" 
+                        class="w-full bg-cyan-500 hover:bg-cyan-400 text-black py-6 rounded-2xl font-semibold text-xl">
+                    Login to VigilAI
+                </button>
+
+                <p id="error" class="text-red-400 text-center hidden"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+
+        async function login() {
+            const username = document.getElementById("username").value.trim();
+            const password = document.getElementById("password").value.trim();
+            const errorEl = document.getElementById("error");
+
+            if (!username || !password) {
+                errorEl.textContent = "Please enter username and password";
+                errorEl.classList.remove("hidden");
+                return;
+            }
+
+            try {
+                const res = await fetch(API + "/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password }),
+                    credentials: "include"
+                });
+
+                if (res.ok) {
+                    window.location.href = "/";
+                } else {
+                    const data = await res.json();
+                    errorEl.textContent = data.detail || "Login failed";
+                    errorEl.classList.remove("hidden");
+                }
+            } catch (e) {
+                errorEl.textContent = "Cannot connect to server. Is uvicorn running?";
+                errorEl.classList.remove("hidden");
+            }
+        }
+    </script>
+</body>
+</html>

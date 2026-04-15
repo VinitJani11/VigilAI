@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+Pillow
+opencv-python
+numpy
+face_recognition
+ultralytics
+lime
+scikit-image
+scipy
+matplotlib

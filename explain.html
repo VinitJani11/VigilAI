@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Explainability - VigilAI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;}
+body{background:#030712;color:#fff;min-height:100vh;padding:40px 24px;}
+.container{max-width:1200px;margin:0 auto;}
+.header{display:flex;align-items:center;gap:16px;margin-bottom:40px;}
+.back-btn{display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:#1c1c2e;border-radius:12px;text-decoration:none;color:#06b6d4;border:none;cursor:pointer;font-size:16px;}
+.back-btn:hover{background:#262640;}
+h1{font-size:2.2rem;font-weight:900;}
+.subtitle{color:#94a3b8;font-size:0.875rem;margin-top:4px;}
+.badges{display:flex;gap:8px;margin-left:auto;}
+.badge{font-size:11px;font-family:monospace;padding:4px 12px;border-radius:999px;}
+.badge-red{background:rgba(239,68,68,.15);border:1px solid #ef4444;color:#ef4444;}
+.badge-green{background:rgba(16,185,129,.15);border:1px solid #10b981;color:#10b981;}
+.badge-cyan{background:rgba(6,182,212,.15);border:1px solid #06b6d4;color:#06b6d4;}
+.grid2{display:grid;grid-template-columns:1fr 320px;gap:24px;margin-bottom:24px;}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+.card{background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:24px;}
+.upload-zone{border:2px dashed #334155;border-radius:16px;padding:48px;text-align:center;cursor:pointer;transition:border-color .3s;}
+.upload-zone:hover{border-color:#06b6d4;}
+.upload-zone i{font-size:3rem;color:#475569;margin-bottom:12px;display:block;}
+.upload-zone p{color:#94a3b8;margin-top:6px;font-size:0.9rem;}
+.upload-title{font-size:1.1rem;font-weight:600;color:#e2e8f0;}
+.preview-bar{display:none;background:#1e293b;border-radius:14px;padding:16px 20px;margin-top:16px;align-items:center;gap:12px;}
+.preview-bar.show{display:flex;}
+.preview-thumb{width:56px;height:56px;object-fit:cover;border-radius:10px;}
+.preview-name{font-weight:600;font-size:0.95rem;}
+.preview-size{color:#64748b;font-size:0.8rem;margin-top:2px;}
+.btn-x{background:none;border:none;color:#f87171;font-size:1.2rem;cursor:pointer;margin-left:auto;padding:4px;}
+label.lbl{display:block;font-size:0.8rem;color:#94a3b8;margin-bottom:6px;}
+input[type=range]{width:100%;accent-color:#06b6d4;}
+select{width:100%;background:#1e293b;border:1px solid #334155;color:#fff;border-radius:10px;padding:8px 14px;font-size:0.875rem;outline:none;}
+select:focus{border-color:#06b6d4;}
+.check-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:0.9rem;color:#cbd5e1;}
+input[type=checkbox]{width:16px;height:16px;accent-color:#06b6d4;}
+.run-btn{width:100%;background:#06b6d4;color:#000;border:none;border-radius:14px;padding:16px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:16px;transition:background .2s;}
+.run-btn:hover:not(:disabled){background:#0891b2;}
+.run-btn:disabled{opacity:.6;cursor:not-allowed;}
+.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;color:#e2e8f0;}
+.conf-row{display:flex;justify-content:space-between;font-size:0.75rem;color:#64748b;margin-top:4px;}
+.conf-val{color:#06b6d4;font-family:monospace;font-weight:700;}
+.settings-section{margin-bottom:20px;}
+
+/* Progress */
+.progress-box{display:none;background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:32px;margin-bottom:24px;}
+.progress-box.show{display:block;}
+.progress-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;}
+.progress-title{font-size:1.2rem;font-weight:700;}
+.progress-sub{color:#94a3b8;font-size:0.85rem;margin-top:4px;}
+.step-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.step-dot{width:24px;height:24px;border-radius:50%;border:2px solid #334155;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
+.step-dot.running{border-color:#06b6d4;animation:spin 1s linear infinite;}
+.step-dot.done{background:#10b981;border-color:#10b981;}
+.step-dot.skip{background:#334155;border-color:#334155;}
+.step-label{font-size:0.875rem;color:#64748b;}
+.step-label.running{color:#06b6d4;font-weight:600;}
+.step-label.done{color:#10b981;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.fa-spin{animation:spin 1s linear infinite;}
+
+/* Results */
+.results{display:none;}
+.results.show{display:block;}
+.summary-card{background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:24px;margin-bottom:20px;}
+.summary-inner{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.summary-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;}
+.summary-icon.warn{background:rgba(239,68,68,.15);}
+.summary-icon.ok{background:rgba(6,182,212,.15);}
+.summary-title{font-size:1.2rem;font-weight:700;}
+.summary-desc{color:#94a3b8;font-size:0.85rem;margin-top:2px;}
+.det-chips{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;}
+.chip{font-size:0.75rem;font-family:monospace;padding:4px 10px;border-radius:999px;}
+.chip-red{background:rgba(239,68,68,.15);border:1px solid #ef4444;color:#ef4444;}
+.chip-cyan{background:rgba(6,182,212,.15);border:1px solid #06b6d4;color:#06b6d4;}
+
+/* Image grid */
+.img-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px;}
+@media(max-width:900px){.img-grid{grid-template-columns:1fr;}}
+.img-card{background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:20px;overflow:hidden;}
+.img-card img{width:100%;object-fit:contain;max-height:260px;background:#000;display:block;}
+.img-card-body{padding:16px;}
+.img-card-title{font-weight:700;font-size:1rem;margin-bottom:4px;}
+.img-card-desc{color:#94a3b8;font-size:0.8rem;line-height:1.5;}
+.img-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+
+/* Interpretation card */
+.interp-card{background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:32px;margin-bottom:20px;}
+.interp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px;}
+@media(max-width:900px){.interp-grid{grid-template-columns:1fr;}}
+.interp-box{background:#1e293b;border-radius:14px;padding:18px;}
+.interp-box h4{font-weight:600;font-size:0.95rem;margin:8px 0 6px;}
+.interp-box p{color:#94a3b8;font-size:0.8rem;line-height:1.6;}
+.legend-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:0.8rem;color:#cbd5e1;}
+.legend-dot{width:18px;height:18px;border-radius:4px;flex-shrink:0;}
+
+/* Breakdown */
+.breakdown-card{background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:32px;}
+.det-item{background:#1e293b;border-radius:14px;padding:20px;margin-bottom:12px;}
+.det-item-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.det-num{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;flex-shrink:0;}
+.det-name{font-weight:600;font-size:1.05rem;}
+.det-badge{font-size:0.7rem;border:1px solid #ef4444;color:#ef4444;background:rgba(239,68,68,.1);padding:2px 8px;border-radius:999px;}
+.det-conf{font-family:monospace;font-size:1.4rem;font-weight:700;}
+.det-conf.red{color:#ef4444;}
+.det-conf.cyan{color:#06b6d4;}
+.bar-bg{background:#334155;border-radius:999px;height:8px;width:100%;margin-bottom:10px;}
+.bar-fill{height:8px;border-radius:999px;}
+.det-meta{display:flex;gap:16px;flex-wrap:wrap;color:#64748b;font-size:0.8rem;}
+.det-meta i{margin-right:4px;}
+
+.section-head{font-size:1.3rem;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+.section-head i{opacity:.7;}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <a href="/" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+    <div>
+      <h1>AI Explainability</h1>
+      <div class="subtitle">Grad-CAM &bull; LIME &bull; Detection Confidence</div>
+    </div>
+    <div class="badges">
+      <span class="badge badge-red">Grad-CAM</span>
+      <span class="badge badge-green">LIME</span>
+      <span class="badge badge-cyan">XAI</span>
+    </div>
+  </div>
+
+  <!-- Upload + Settings -->
+  <div class="grid2">
+    <div>
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-inp').click()">
+        <i class="fa-solid fa-microscope"></i>
+        <div class="upload-title">Drop image here to explain</div>
+        <p>JPG or PNG — the AI will explain what it sees and why</p>
+        <input id="file-inp" type="file" accept="image/*" style="display:none" onchange="previewFile(this)">
+      </div>
+      <div class="preview-bar" id="preview-bar">
+        <img id="prev-thumb" class="preview-thumb">
+        <div>
+          <div class="preview-name" id="prev-name"></div>
+          <div class="preview-size" id="prev-size"></div>
+        </div>
+        <button class="btn-x" onclick="clearFile()">&#10005;</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="settings-section">
+        <div class="section-title">Settings</div>
+
+        <div style="margin-bottom:16px;">
+          <label class="lbl">Detection Confidence</label>
+          <input type="range" id="conf-slider" min="0.10" max="0.80" step="0.01" value="0.25"
+                 oninput="document.getElementById('conf-val').textContent=parseFloat(this.value).toFixed(2)">
+          <div class="conf-row"><span>0.10</span><span class="conf-val" id="conf-val">0.25</span><span>0.80</span></div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label class="lbl">LIME Samples</label>
+          <select id="lime-samples">
+            <option value="50">50 — Fast (less accurate)</option>
+            <option value="100" selected>100 — Balanced</option>
+            <option value="200">200 — Accurate (slow)</option>
+            <option value="500">500 — High quality (very slow)</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label class="lbl">Grad-CAM Colormap</label>
+          <select id="gcam-style">
+            <option value="jet">Jet (Blue→Red)</option>
+            <option value="hot" selected>Hot (Yellow→Red)</option>
+            <option value="plasma">Plasma (Purple→Yellow)</option>
+            <option value="viridis">Viridis (Blue→Green)</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom:8px;"><label class="lbl">Methods to Run</label></div>
+        <label class="check-row"><input type="checkbox" id="opt-gcam" checked> Grad-CAM Heatmap</label>
+        <label class="check-row"><input type="checkbox" id="opt-lime" checked> LIME Superpixels</label>
+        <label class="check-row"><input type="checkbox" id="opt-det"  checked> Detection Overlay</label>
+
+        <button class="run-btn" id="run-btn" onclick="runExplain()">
+          <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:8px;"></i>Explain
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-box" id="progress-box">
+    <div class="progress-header">
+      <i class="fa-solid fa-brain fa-spin" style="font-size:2rem;color:#06b6d4;"></i>
+      <div>
+        <div class="progress-title">Running Explainability...</div>
+        <div class="progress-sub">LIME may take 10–60 seconds depending on sample count</div>
+      </div>
+    </div>
+    <div class="step-row"><div class="step-dot" id="sd-detect"></div><div class="step-label" id="sl-detect">YOLO Detection</div></div>
+    <div class="step-row"><div class="step-dot" id="sd-gcam"></div><div class="step-label" id="sl-gcam">Grad-CAM Heatmap</div></div>
+    <div class="step-row"><div class="step-dot" id="sd-lime"></div><div class="step-label" id="sl-lime">LIME Superpixel Analysis</div></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <div class="summary-card">
+      <div id="summary-inner" class="summary-inner"></div>
+    </div>
+
+    <div class="img-grid" id="img-grid"></div>
+
+    <!-- How to read -->
+    <div class="interp-card">
+      <div class="section-head"><i class="fa-solid fa-book-open" style="color:#06b6d4;"></i> How to Read These Results</div>
+      <div class="interp-grid">
+        <div class="interp-box">
+          <span class="badge badge-red">Grad-CAM</span>
+          <h4>Gradient Class Activation Map</h4>
+          <p>Shows which spatial regions had the highest influence on the detection decision. Hot/bright areas = the AI focused most here. Computed by weighting activation regions by detection confidence.</p>
+        </div>
+        <div class="interp-box">
+          <span class="badge badge-green">LIME</span>
+          <h4>Local Interpretable Model-agnostic</h4>
+          <p>Segments the image into superpixels and systematically hides each region to measure its contribution. <span style="color:#10b981;font-weight:600;">Green = helped detection.</span> Works with any ML model without accessing internals.</p>
+        </div>
+        <div class="interp-box">
+          <span class="badge badge-cyan">Combined</span>
+          <h4>Interpreting Together</h4>
+          <p>When Grad-CAM hot regions and LIME green superpixels overlap, that region is both strongly activated and positively contributing — giving you high confidence the AI is focusing on the right thing.</p>
+        </div>
+      </div>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(16,185,129,.4);border:1px solid #10b981;"></div>LIME Positive (helped detection)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(239,68,68,.4);border:1px solid #ef4444;"></div>LIME Negative (suppressed detection)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div>Grad-CAM High Activation</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;opacity:.6;"></div>Grad-CAM Low Activation</div>
+      </div>
+    </div>
+
+    <!-- Breakdown -->
+    <div class="breakdown-card">
+      <div class="section-head"><i class="fa-solid fa-list-check" style="color:#a855f7;"></i> Detection Breakdown</div>
+      <div id="breakdown-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+let selFile = null;
+
+function previewFile(input) {
+  const f = input.files[0];
+  if (!f) return;
+  selFile = f;
+  document.getElementById("prev-name").textContent = f.name;
+  document.getElementById("prev-size").textContent = (f.size/1024).toFixed(1) + " KB";
+  const r = new FileReader();
+  r.onload = e => { document.getElementById("prev-thumb").src = e.target.result; };
+  r.readAsDataURL(f);
+  document.getElementById("preview-bar").classList.add("show");
+  document.getElementById("results").classList.remove("show");
+}
+
+function clearFile() {
+  selFile = null;
+  document.getElementById("preview-bar").classList.remove("show");
+  document.getElementById("file-inp").value = "";
+  document.getElementById("results").classList.remove("show");
+}
+
+function setStep(id, state) {
+  const dot = document.getElementById("sd-" + id);
+  const lbl = document.getElementById("sl-" + id);
+  dot.className = "step-dot " + state;
+  lbl.className = "step-label " + state;
+  if (state === "done") dot.textContent = "✓";
+  else if (state === "skip") dot.textContent = "—";
+  else dot.textContent = "";
+}
+
+async function runExplain() {
+  if (!selFile) { alert("Please select an image first"); return; }
+  const doGcam  = document.getElementById("opt-gcam").checked;
+  const doLime  = document.getElementById("opt-lime").checked;
+  const doDet   = document.getElementById("opt-det").checked;
+  const conf    = parseFloat(document.getElementById("conf-slider").value);
+  const samples = parseInt(document.getElementById("lime-samples").value);
+  const cmap    = document.getElementById("gcam-style").value;
+  if (!doGcam && !doLime && !doDet) { alert("Enable at least one method"); return; }
+
+  document.getElementById("results").classList.remove("show");
+  document.getElementById("progress-box").classList.add("show");
+  ["detect","gcam","lime"].forEach(s => setStep(s, ""));
+
+  const btn = document.getElementById("run-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px;"></i>Processing...';
+
+  setStep("detect", "running");
+
+  const form = new FormData();
+  form.append("file", selFile);
+  form.append("confidence", conf);
+  form.append("lime_samples", samples);
+  form.append("gcam_style", cmap);
+  form.append("do_gcam", doGcam);
+  form.append("do_lime", doLime);
+  form.append("do_detection", doDet);
+
+  try {
+    const res = await fetch(API + "/explain-image", { method: "POST", body: form });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Server error " + res.status); }
+    const data = await res.json();
+
+    setStep("detect", "done");
+    setTimeout(() => setStep("gcam", data.gcam_image ? "done" : "skip"), 150);
+    setTimeout(() => setStep("lime", data.lime_image ? "done" : "skip"), 300);
+    setTimeout(() => {
+      document.getElementById("progress-box").classList.remove("show");
+      showResults(data);
+    }, 600);
+  } catch(e) {
+    document.getElementById("progress-box").classList.remove("show");
+    alert("Error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" style="margin-right:8px;"></i>Explain';
+  }
+}
+
+function showResults(data) {
+  const dets = data.detections || [];
+  const hasWeapon = dets.some(d => /knife|pistol|gun/.test(d.class));
+
+  // Summary
+  const sum = document.getElementById("summary-inner");
+  if (dets.length === 0) {
+    sum.innerHTML = `<div class="summary-icon ok"><i class="fa-solid fa-circle-info" style="color:#06b6d4;"></i></div>
+      <div><div class="summary-title">No detections found</div><div class="summary-desc">Try lowering the confidence threshold</div></div>`;
+  } else {
+    sum.innerHTML = `
+      <div class="summary-icon ${hasWeapon ? 'warn' : 'ok'}">${hasWeapon ? '⚠️' : '🔍'}</div>
+      <div>
+        <div class="summary-title">${dets.length} object${dets.length>1?'s':''} detected</div>
+        <div class="summary-desc">${hasWeapon ? 'WEAPON DETECTED — see heatmap for focus regions' : 'No weapons — AI focus regions shown below'}</div>
+      </div>
+      <div class="det-chips">
+        ${dets.map(d => `<span class="chip ${/knife|pistol|gun/.test(d.class) ? 'chip-red' : 'chip-cyan'}">${d.class} ${(d.confidence*100).toFixed(0)}%</span>`).join('')}
+      </div>`;
+  }
+
+  // Images
+  const grid = document.getElementById("img-grid");
+  const panels = [];
+  if (data.detection_image) panels.push({ img: data.detection_image, title: "Detection Overlay", badge: "badge-cyan", bl: "YOLO", desc: "Standard YOLO bounding boxes showing what was detected and its location." });
+  if (data.gcam_image)      panels.push({ img: data.gcam_image,      title: "Grad-CAM Heatmap",   badge: "badge-red",   bl: "Grad-CAM", desc: "Hot/bright areas show where the model focused most attention during detection." });
+  if (data.lime_image)      panels.push({ img: data.lime_image,      title: "LIME Explanation",   badge: "badge-green", bl: "LIME", desc: "Green superpixels contributed positively. Dark/red regions suppressed the detection." });
+  grid.innerHTML = panels.map(p => `
+    <div class="img-card">
+      <img src="${p.img}">
+      <div class="img-card-body">
+        <div class="img-card-header">
+          <div class="img-card-title">${p.title}</div>
+          <span class="badge ${p.badge}">${p.bl}</span>
+        </div>
+        <div class="img-card-desc">${p.desc}</div>
+      </div>
+    </div>`).join('');
+
+  // Breakdown
+  const bk = document.getElementById("breakdown-list");
+  if (dets.length === 0) {
+    bk.innerHTML = `<p style="color:#64748b;text-align:center;padding:24px;">No detections to break down. Lower the confidence threshold and try again.</p>`;
+  } else {
+    bk.innerHTML = dets.map((d, i) => {
+      const isW = /knife|pistol|gun/.test(d.class);
+      const pct = (d.confidence * 100).toFixed(1);
+      const [x, y, w, h] = d.bbox || [0,0,0,0];
+      return `<div class="det-item">
+        <div class="det-item-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="det-num" style="background:${isW?'rgba(239,68,68,.15)':'rgba(6,182,212,.15)'};color:${isW?'#ef4444':'#06b6d4'};">${i+1}</div>
+            <span class="det-name" style="text-transform:capitalize;">${d.class}</span>
+            ${isW ? '<span class="det-badge">WEAPON</span>' : ''}
+          </div>
+          <span class="det-conf ${isW?'red':'cyan'}">${pct}%</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${isW?'#ef4444':'#06b6d4'};"></div></div>
+        <div class="det-meta">
+          <span><i class="fa-solid fa-location-dot"></i>Position: (${x}, ${y})</span>
+          <span><i class="fa-solid fa-expand"></i>Size: ${w}×${h}px</span>
+          <span><i class="fa-solid fa-gauge"></i>Confidence: ${pct}%</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById("results").classList.add("show");
+  document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+}
+</script>
+</body>
+</html>

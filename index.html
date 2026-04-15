@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VigilAI - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        body { background: #030712; overflow-x: hidden; }
+        .bg-grid { position: fixed; inset: 0; background-image: linear-gradient(rgba(6,182,212,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,0.04) 1px, transparent 1px); background-size: 60px 60px; animation: gridMove 20s linear infinite; z-index: 0; }
+        @keyframes gridMove { 0% { transform: translateY(0); } 100% { transform: translateY(60px); } }
+        .bg-glow { position: fixed; inset: 0; background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(6,182,212,0.12), transparent); z-index: 0; pointer-events: none; }
+        .scanlines { position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px); z-index: 0; pointer-events: none; }
+        .content { position: relative; z-index: 10; }
+        @keyframes logoPulse { 0%, 100% { box-shadow: 0 0 20px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.2); } 50% { box-shadow: 0 0 30px rgba(239,68,68,0.8), 0 0 60px rgba(239,68,68,0.4); } }
+        .logo-glow { animation: logoPulse 2s ease-in-out infinite; }
+        @keyframes glitch { 0%, 90%, 100% { transform: translate(0); text-shadow: 0 0 20px rgba(6,182,212,0.5); } 92% { transform: translate(-2px, 1px); text-shadow: -2px 0 rgba(255,0,80,0.7), 2px 0 rgba(0,255,200,0.7); } 94% { transform: translate(2px, -1px); text-shadow: 2px 0 rgba(255,0,80,0.7), -2px 0 rgba(0,255,200,0.7); } 96% { transform: translate(0); } }
+        .title-glitch { animation: glitch 4s ease-in-out infinite; }
+        @keyframes statusPing { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+        .status-dot { animation: statusPing 1.5s ease-in-out infinite; }
+        @keyframes statusRing { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(2.5); opacity: 0; } }
+        .status-ring { animation: statusRing 1.5s ease-out infinite; }
+        @keyframes cardEnter { from { opacity: 0; transform: translateY(30px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .card-1 { animation: cardEnter 0.5s ease forwards; opacity: 0; }
+        .card-2 { animation: cardEnter 0.5s 0.1s ease forwards; opacity: 0; }
+        .card-3 { animation: cardEnter 0.5s 0.2s ease forwards; opacity: 0; }
+        .card-4 { animation: cardEnter 0.5s 0.3s ease forwards; opacity: 0; }
+        .card-5 { animation: cardEnter 0.5s 0.4s ease forwards; opacity: 0; }
+        .card-6 { animation: cardEnter 0.5s 0.5s ease forwards; opacity: 0; }
+        .nav-card { background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.06); backdrop-filter: blur(10px); transition: all 0.3s ease; position: relative; overflow: hidden; }
+        .nav-card:hover { transform: translateY(-6px); }
+        .card-cyan:hover { box-shadow: 0 0 30px rgba(6,182,212,0.2), 0 20px 40px rgba(0,0,0,0.4); border-color: rgba(6,182,212,0.4) !important; }
+        .card-emerald:hover { box-shadow: 0 0 30px rgba(16,185,129,0.2), 0 20px 40px rgba(0,0,0,0.4); border-color: rgba(16,185,129,0.4) !important; }
+        .card-violet:hover { box-shadow: 0 0 30px rgba(139,92,246,0.2), 0 20px 40px rgba(0,0,0,0.4); border-color: rgba(139,92,246,0.4) !important; }
+        .card-rose:hover { box-shadow: 0 0 30px rgba(244,63,94,0.2), 0 20px 40px rgba(0,0,0,0.4); border-color: rgba(244,63,94,0.4) !important; }
+        .card-orange:hover { box-shadow: 0 0 30px rgba(249,115,22,0.2), 0 20px 40px rgba(0,0,0,0.4); border-color: rgba(249,115,22,0.4) !important; }
+        .icon-box { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 1.5rem; transition: transform 0.3s ease; }
+        .nav-card:hover .icon-box { transform: scale(1.1) rotate(-5deg); }
+        .arrow-link { display: inline-flex; align-items: center; gap: 6px; font-size: 0.875rem; font-weight: 500; transition: gap 0.2s ease; }
+        .nav-card:hover .arrow-link { gap: 10px; }
+        @keyframes headerEnter { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .header-anim { animation: headerEnter 0.6s ease forwards; }
+        @keyframes subtitleEnter { from { opacity: 0; } to { opacity: 1; } }
+        .subtitle-anim { animation: subtitleEnter 1s 0.4s ease forwards; opacity: 0; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .cursor { animation: blink 1s step-end infinite; }
+        .corner-tl, .corner-br { position: absolute; width: 20px; height: 20px; opacity: 0.4; }
+        .corner-tl { top: 12px; left: 12px; border-top: 2px solid; border-left: 2px solid; border-radius: 2px 0 0 0; }
+        .corner-br { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; border-radius: 0 0 2px 0; }
+        @keyframes statsIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .stats-anim { animation: statsIn 0.7s 0.7s ease forwards; opacity: 0; }
+        @keyframes countUp { from { opacity: 0.4; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .count-update { animation: countUp 0.3s ease; }
+    </style>
+</head>
+<body class="text-white min-h-screen">
+    <div class="bg-grid"></div>
+    <div class="bg-glow"></div>
+    <div class="scanlines"></div>
+    <div class="content max-w-6xl mx-auto px-8 py-10">
+
+        <!-- Header -->
+        <div class="header-anim flex items-center justify-between mb-16">
+            <div class="flex items-center gap-4">
+                <div class="logo-glow w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-3xl">&#128065;</div>
+                <div>
+                    <h1 class="title-glitch text-5xl font-black tracking-tight">VigilAI</h1>
+                    <p class="mono text-xs text-cyan-500 mt-0.5 tracking-widest uppercase">Surveillance System v2.0</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 bg-neutral-900/80 border border-neutral-800 rounded-2xl px-5 py-3 backdrop-blur">
+                <div class="relative flex items-center justify-center w-3 h-3">
+                    <div class="status-ring absolute w-3 h-3 rounded-full bg-emerald-400"></div>
+                    <div class="status-dot w-3 h-3 rounded-full bg-emerald-400"></div>
+                </div>
+                <span class="mono text-sm text-emerald-400 font-medium">SYSTEM ONLINE</span>
+            </div>
+        </div>
+
+        <!-- Subtitle -->
+        <div class="subtitle-anim text-center mb-10">
+            <h2 class="text-4xl font-bold mb-3">Real-time <span class="text-cyan-400">Threat Detection</span></h2>
+            <p class="text-neutral-400 text-lg">Knife &nbsp;&bull;&nbsp; Pistol &nbsp;&bull;&nbsp; Criminal Face Recognition <span class="cursor text-cyan-500">|</span></p>
+        </div>
+
+        <!-- Live Stats Bar -->
+        <div class="stats-anim mb-12">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-neutral-900/80 border border-neutral-800 rounded-2xl px-6 py-5 flex items-center gap-4 backdrop-blur">
+                    <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 flex-shrink-0">
+                        <i class="fa-solid fa-users text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="mono text-2xl font-bold text-cyan-400" id="stat-criminals">—</div>
+                        <div class="text-xs text-neutral-500 mt-0.5">Criminals</div>
+                    </div>
+                </div>
+                <div class="bg-neutral-900/80 border border-neutral-800 rounded-2xl px-6 py-5 flex items-center gap-4 backdrop-blur">
+                    <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 flex-shrink-0">
+                        <i class="fa-solid fa-camera text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="mono text-2xl font-bold text-orange-400" id="stat-screenshots">—</div>
+                        <div class="text-xs text-neutral-500 mt-0.5">Screenshots</div>
+                    </div>
+                </div>
+                <div class="bg-neutral-900/80 border border-neutral-800 rounded-2xl px-6 py-5 flex items-center gap-4 backdrop-blur">
+                    <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 flex-shrink-0">
+                        <i class="fa-solid fa-face-viewfinder text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="mono text-2xl font-bold text-rose-400" id="stat-matches">—</div>
+                        <div class="text-xs text-neutral-500 mt-0.5">Face Matches</div>
+                    </div>
+                </div>
+                <div class="bg-neutral-900/80 border border-neutral-800 rounded-2xl px-6 py-5 flex items-center gap-4 backdrop-blur">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                        <i class="fa-solid fa-clock text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="mono text-sm font-bold text-emerald-400 leading-tight" id="stat-last">—</div>
+                        <div class="text-xs text-neutral-500 mt-0.5">Last Alert</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nav Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <a href="/live-detection.html" class="nav-card card-cyan card-1 rounded-3xl p-8 block">
+                <div class="corner-tl border-cyan-500"></div>
+                <div class="corner-br border-cyan-500"></div>
+                <div class="icon-box bg-cyan-500/10 border border-cyan-500/20 text-cyan-400"><i class="fa-solid fa-video"></i></div>
+                <h3 class="text-2xl font-bold mb-2">Live Detection</h3>
+                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">Real-time camera feed with YOLO weapon detection and criminal face matching</p>
+                <span class="arrow-link text-cyan-400">Start Monitoring <i class="fa-solid fa-arrow-right text-xs"></i></span>
+            </a>
+            <a href="/criminal-upload.html" class="nav-card card-emerald card-2 rounded-3xl p-8 block">
+                <div class="corner-tl border-emerald-500"></div>
+                <div class="corner-br border-emerald-500"></div>
+                <div class="icon-box bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"><i class="fa-solid fa-user-plus"></i></div>
+                <h3 class="text-2xl font-bold mb-2">Upload Criminal</h3>
+                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">Add new criminal records with photos to the facial recognition database</p>
+                <span class="arrow-link text-emerald-400">Add New Record <i class="fa-solid fa-arrow-right text-xs"></i></span>
+            </a>
+            <a href="/criminal-list.html" class="nav-card card-violet card-3 rounded-3xl p-8 block">
+                <div class="corner-tl border-violet-500"></div>
+                <div class="corner-br border-violet-500"></div>
+                <div class="icon-box bg-violet-500/10 border border-violet-500/20 text-violet-400"><i class="fa-solid fa-database"></i></div>
+                <h3 class="text-2xl font-bold mb-2">Criminal Database</h3>
+                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">View, manage and search all criminal records including auto-added suspects</p>
+                <span class="arrow-link text-violet-400">Open Database <i class="fa-solid fa-arrow-right text-xs"></i></span>
+            </a>
+            <a href="/upload-detect.html" class="nav-card card-rose card-4 rounded-3xl p-8 block">
+                <div class="corner-tl border-rose-500"></div>
+                <div class="corner-br border-rose-500"></div>
+                <div class="icon-box bg-rose-500/10 border border-rose-500/20 text-rose-400"><i class="fa-solid fa-film"></i></div>
+                <h3 class="text-2xl font-bold mb-2">Upload Detection</h3>
+                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">Analyse uploaded images or videos for weapons and known criminal faces</p>
+                <span class="arrow-link text-rose-400">Upload &amp; Analyse <i class="fa-solid fa-arrow-right text-xs"></i></span>
+            </a>
+            <a href="/detection-history.html" class="nav-card card-orange card-5 rounded-3xl p-8 block">
+                <div class="corner-tl border-orange-500"></div>
+                <div class="corner-br border-orange-500"></div>
+                <div class="icon-box bg-orange-500/10 border border-orange-500/20 text-orange-400"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                <h3 class="text-2xl font-bold mb-2">Detection History</h3>
+                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">Review all past weapon detection alerts, screenshots and face match logs</p>
+                <span class="arrow-link text-orange-400">View History <i class="fa-solid fa-arrow-right text-xs"></i></span>
+            </a>
+            <a href="/explain.html" class="nav-card card-6 rounded-3xl p-8 block" style="border-color:rgba(168,85,247,0.15);" onmouseover="this.style.boxShadow='0 0 30px rgba(168,85,247,0.25),0 20px 40px rgba(0,0,0,0.4)';this.style.transform='translateY(-6px)';this.style.borderColor='rgba(168,85,247,0.5)';" onmouseout="this.style.boxShadow='';this.style.transform='';this.style.borderColor='rgba(168,85,247,0.15)';">
+                <div class="corner-tl" style="border-color:#a855f7;top:12px;left:12px;"></div>
+                <div class="corner-br" style="border-color:#a855f7;bottom:12px;right:12px;"></div>
+                <div class="icon-box" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);color:#a855f7;"><i class="fa-solid fa-brain"></i></div>
+                <h3 class="text-2xl font-bold mb-2">AI Explainability</h3>
+                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">Grad-CAM heatmaps &amp; LIME superpixels — see exactly why the AI made each detection decision</p>
+                <span class="arrow-link" style="color:#a855f7;">Open Explainer <i class="fa-solid fa-arrow-right text-xs"></i></span>
+            </a>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-14 flex items-center justify-between text-neutral-600 text-xs mono">
+            <span>VIGILAI &copy; 2026</span>
+            <span>KNIFE &bull; PISTOL &bull; FACE RECOGNITION</span>
+            <span id="clock"></span>
+        </div>
+    </div>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+
+        function updateClock() {
+            document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-GB", { hour12: false });
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        function animateValue(el, newVal) {
+            el.classList.remove("count-update");
+            void el.offsetWidth;
+            el.textContent = newVal;
+            el.classList.add("count-update");
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(API + "/stats");
+                if (!res.ok) return;
+                const s = await res.json();
+                animateValue(document.getElementById("stat-criminals"), s.total_criminals);
+                animateValue(document.getElementById("stat-screenshots"), s.total_screenshots);
+                animateValue(document.getElementById("stat-matches"), s.total_matches);
+                const lastEl = document.getElementById("stat-last");
+                if (s.last_detection) {
+                    const d = new Date(s.last_detection);
+                    const now = new Date();
+                    const diffMin = Math.floor((now - d) / 60000);
+                    if (diffMin < 1) lastEl.textContent = "Just now";
+                    else if (diffMin < 60) lastEl.textContent = diffMin + "m ago";
+                    else if (diffMin < 1440) lastEl.textContent = Math.floor(diffMin / 60) + "h ago";
+                    else lastEl.textContent = d.toLocaleDateString();
+                } else {
+                    lastEl.textContent = "None yet";
+                }
+            } catch (e) {
+                document.getElementById("stat-criminals").textContent = "—";
+            }
+        }
+
+        loadStats();
+        setInterval(loadStats, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Face Match History - VigilAI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;}
+body{background:#030712;color:#fff;min-height:100vh;padding:40px 24px;}
+.container{max-width:900px;margin:0 auto;}
+.back-btn{display:inline-flex;align-items:center;gap:8px;color:#06b6d4;text-decoration:none;margin-bottom:32px;font-size:0.9rem;}
+.back-btn:hover{color:#0891b2;}
+h1{font-size:2rem;font-weight:800;margin-bottom:4px;}
+.sub{color:#64748b;font-size:0.875rem;margin-bottom:32px;}
+.toolbar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.toolbar input,.toolbar select{background:#0f172a;border:1px solid #334155;color:#fff;border-radius:10px;padding:10px 16px;font-size:0.875rem;outline:none;}
+.toolbar input:focus,.toolbar select:focus{border-color:#06b6d4;}
+.toolbar input{flex:1;min-width:200px;}
+.btn{background:#06b6d4;color:#000;border:none;border-radius:10px;padding:10px 20px;font-size:0.875rem;font-weight:700;cursor:pointer;}
+.btn:hover{background:#0891b2;}
+.count{color:#64748b;font-size:0.8rem;margin-bottom:16px;}
+.match-card{background:#0f172a;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px 24px;margin-bottom:10px;display:flex;align-items:center;gap:20px;transition:border-color .2s;}
+.match-card:hover{border-color:rgba(244,63,94,.3);}
+.idx{width:36px;height:36px;border-radius:10px;background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:#f43f5e;font-family:monospace;font-weight:700;font-size:0.85rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.name{font-size:1.05rem;font-weight:600;}
+.meta{color:#64748b;font-size:0.78rem;margin-top:3px;}
+.bar-wrap{flex:1;min-width:80px;}
+.bar-bg{background:#1e293b;border-radius:999px;height:6px;margin-top:6px;}
+.bar-fill{height:6px;border-radius:999px;}
+.conf-val{font-family:monospace;font-size:1.5rem;font-weight:700;flex-shrink:0;min-width:64px;text-align:right;}
+.empty{text-align:center;padding:64px;color:#475569;}
+.empty i{font-size:3rem;display:block;margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="container">
+    <a href="/" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Dashboard</a>
+    <h1>Face Match History</h1>
+    <div class="sub">Every time a face matched a criminal during Live Detection</div>
+
+    <div class="toolbar">
+        <input id="search" type="text" placeholder="Search by name..." oninput="applyFilter()">
+        <select id="conf-filter" onchange="applyFilter()">
+            <option value="0">All Confidence</option>
+            <option value="0.7">70%+</option>
+            <option value="0.8">80%+</option>
+            <option value="0.9">90%+</option>
+        </select>
+        <button class="btn" onclick="loadHistory()"><i class="fa-solid fa-refresh" style="margin-right:6px;"></i>Refresh</button>
+    </div>
+
+    <div id="count" class="count">Loading...</div>
+    <div id="list"></div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+let all = [];
+
+async function loadHistory() {
+    document.getElementById("list").innerHTML = '<div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><div>Loading...</div></div>';
+    try {
+        const res = await fetch(API + "/match-history");
+        if (!res.ok) throw new Error();
+        all = await res.json();
+        applyFilter();
+    } catch(e) {
+        document.getElementById("list").innerHTML = '<div class="empty"><i class="fa-solid fa-circle-exclamation" style="color:#ef4444;"></i><div>Failed to load. Make sure the server is running.</div></div>';
+    }
+}
+
+function applyFilter() {
+    const term = document.getElementById("search").value.toLowerCase().trim();
+    const confMin = parseFloat(document.getElementById("conf-filter").value) || 0;
+    const filtered = all.filter(m => {
+        const matchName = !term || (m.name||'').toLowerCase().includes(term);
+        return matchName && m.similarity >= confMin;
+    });
+    document.getElementById("count").textContent = `Showing ${filtered.length} of ${all.length} match events`;
+    render(filtered);
+}
+
+function render(items) {
+    const el = document.getElementById("list");
+    if (items.length === 0) {
+        el.innerHTML = '<div class="empty"><i class="fa-solid fa-face-viewfinder" style="color:#475569;"></i><div>No face matches recorded yet.<br>Matches from Live Detection will appear here automatically.</div></div>';
+        return;
+    }
+    el.innerHTML = items.map((m, i) => {
+        const pct = (m.similarity * 100).toFixed(1);
+        const n = parseFloat(pct);
+        const color = n >= 90 ? "#ef4444" : n >= 80 ? "#f97316" : n >= 70 ? "#eab308" : "#06b6d4";
+        return `
+        <div class="match-card">
+            <div class="idx">${i+1}</div>
+            <div style="flex:1;min-width:0;">
+                <div class="name">${m.name}</div>
+                <div class="meta"><i class="fa-regular fa-clock" style="margin-right:4px;"></i>${new Date(m.timestamp).toLocaleString()}</div>
+                <div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div></div>
+            </div>
+            <div class="conf-val" style="color:${color};">${pct}%</div>
+        </div>`;
+    }).join('');
+}
+
+loadHistory();
+</script>
+</body>
+</html>

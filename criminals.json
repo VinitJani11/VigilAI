@@ -1,0 +1,45 @@
+[
+  {
+    "id": "5cb8a5ba",
+    "name": "jas",
+    "description": "No description",
+    "image_path": "/criminals/5cb8a5ba_vi.jpg",
+    "added_at": "2026-03-31T18:16:08.291578"
+  },
+  {
+    "id": "592f5e8e",
+    "name": "vinit",
+    "description": "spot in london",
+    "image_path": "/criminals/592f5e8e_v.jpg",
+    "added_at": "2026-03-31T21:12:38.601702"
+  },
+  {
+    "id": "bbcfaf93",
+    "name": "Vinit Jani",
+    "description": "No description",
+    "image_path": "/criminals/bbcfaf93_Vinit_Jani.jpg",
+    "added_at": "2026-04-01T09:55:41.256693"
+  },
+  {
+    "id": "58459e9d",
+    "name": "navjot",
+    "description": "No description",
+    "image_path": "/criminals/58459e9d_nav.png",
+    "added_at": "2026-04-01T10:51:00.628985"
+  },
+  {
+    "id": "ddfe60b5",
+    "name": "Auto-Added #14 - Weapon Alert",
+    "description": "Auto-detected with weapon on 2026-04-05 16:04:45",
+    "image_path": "/criminals/ddfe60b5_auto_weapon_20260405_160445.jpg",
+    "added_at": "2026-04-05T16:04:45.709470",
+    "weapon_detections": 2
+  },
+  {
+    "id": "1e41d4b9",
+    "name": "Neha",
+    "description": "No description",
+    "image_path": "/criminals/1e41d4b9_Neha.jpg",
+    "added_at": "2026-04-08T09:22:54.103482"
+  }
+]

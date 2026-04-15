@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criminal Database - VigilAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .risk-none { display: none; }
+        .risk-low  { background: rgba(234,179,8,0.12); border: 1px solid #eab308; color: #eab308; }
+        .risk-med  { background: rgba(249,115,22,0.12); border: 1px solid #f97316; color: #f97316; }
+        .risk-high { background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color: #ef4444; animation: riskPulse 2s ease-in-out infinite; }
+        @keyframes riskPulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    </style>
+</head>
+<body class="bg-neutral-950 text-white">
+    <div class="max-w-6xl mx-auto p-8">
+        <a href="/" class="inline-flex items-center gap-2 text-cyan-400 mb-10 hover:text-cyan-300">
+            <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+        </a>
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-4xl font-bold">Criminal Database</h1>
+                <p class="text-neutral-500 text-sm mt-1">Risk score based on weapon-detected incidents</p>
+            </div>
+            <a href="/criminal-upload.html" class="bg-cyan-500 text-black px-8 py-4 rounded-2xl font-semibold flex items-center gap-2 hover:bg-cyan-400 transition">
+                <i class="fa-solid fa-plus"></i> Add New Criminal
+            </a>
+        </div>
+
+        <!-- Search + Filter -->
+        <div class="flex gap-4 mb-8 flex-wrap">
+            <div class="relative flex-1 min-w-64">
+                <i class="fa-solid fa-search absolute left-5 top-1/2 -translate-y-1/2 text-neutral-400"></i>
+                <input id="search-input" type="text" placeholder="Search by name..."
+                       class="w-full bg-neutral-900 border border-neutral-700 rounded-3xl py-4 pl-14 pr-6 focus:outline-none focus:border-cyan-500">
+            </div>
+            <select id="risk-filter" class="bg-neutral-900 border border-neutral-700 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:border-cyan-500">
+                <option value="all">All Risk Levels</option>
+                <option value="high">High Risk Only</option>
+                <option value="med">Medium Risk</option>
+                <option value="low">Low Risk</option>
+                <option value="none">No Risk Score</option>
+            </select>
+        </div>
+
+        <!-- Stats row -->
+        <div id="stats" class="mb-6 flex gap-6 text-sm flex-wrap">
+            <span class="text-neutral-500">Loading...</span>
+        </div>
+
+        <div id="criminal-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="bg-neutral-900 rounded-3xl p-8 w-full max-w-md mx-4">
+            <h2 class="text-2xl font-bold mb-6">Edit Criminal Record</h2>
+            <input id="edit-id" type="hidden">
+            <div class="mb-6">
+                <label class="block text-sm text-neutral-400 mb-2">Full Name</label>
+                <input id="edit-name" type="text"
+                       class="w-full bg-neutral-800 rounded-2xl px-6 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-cyan-500">
+            </div>
+            <div class="mb-8">
+                <label class="block text-sm text-neutral-400 mb-2">Description / Notes</label>
+                <textarea id="edit-desc" rows="4"
+                          class="w-full bg-neutral-800 rounded-2xl px-6 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
+            </div>
+            <div id="edit-error" class="hidden mb-4 bg-red-500/20 border border-red-500 text-red-400 p-3 rounded-xl text-center text-sm"></div>
+            <div class="flex gap-4">
+                <button onclick="closeModal()" class="flex-1 py-4 rounded-2xl border border-neutral-700 hover:bg-neutral-800 transition">Cancel</button>
+                <button onclick="saveEdit()" id="save-btn" class="flex-1 bg-cyan-500 text-black py-4 rounded-2xl font-semibold hover:bg-cyan-400 transition">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+        let allCriminals = [];
+
+        function getRiskLevel(weaponDetections) {
+            const n = weaponDetections || 0;
+            if (n === 0) return { level: "none", label: "", cls: "risk-none" };
+            if (n <= 2)  return { level: "low",  label: `LOW RISK · ${n}x weapon`, cls: "risk-low" };
+            if (n <= 5)  return { level: "med",  label: `MED RISK · ${n}x weapon`, cls: "risk-med" };
+            return           { level: "high", label: `HIGH RISK · ${n}x weapon`, cls: "risk-high" };
+        }
+
+        async function loadCriminals() {
+            try {
+                const res = await fetch(API + "/criminals");
+                allCriminals = await res.json();
+                updateStats(allCriminals);
+                applyFilters();
+            } catch (err) {
+                document.getElementById("criminal-list").innerHTML =
+                    '<p class="text-red-400 text-center py-12 col-span-full">Failed to load. Make sure the server is running at http://127.0.0.1:8000</p>';
+            }
+        }
+
+        function updateStats(criminals) {
+            const high = criminals.filter(c => (c.weapon_detections || 0) >= 6).length;
+            const med  = criminals.filter(c => { const n = c.weapon_detections||0; return n>=3&&n<=5; }).length;
+            const low  = criminals.filter(c => { const n = c.weapon_detections||0; return n>=1&&n<=2; }).length;
+            document.getElementById("stats").innerHTML = `
+                <span class="text-neutral-400">Total: <strong class="text-white">${criminals.length}</strong></span>
+                <span class="text-red-400"><i class="fa-solid fa-circle-exclamation mr-1"></i>High: <strong>${high}</strong></span>
+                <span class="text-orange-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Med: <strong>${med}</strong></span>
+                <span class="text-yellow-400"><i class="fa-solid fa-circle-info mr-1"></i>Low: <strong>${low}</strong></span>`;
+        }
+
+        function applyFilters() {
+            const term = document.getElementById("search-input").value.toLowerCase().trim();
+            const riskFilter = document.getElementById("risk-filter").value;
+            let filtered = allCriminals.filter(c => {
+                const matchName = c.name.toLowerCase().includes(term);
+                const risk = getRiskLevel(c.weapon_detections).level;
+                const matchRisk = riskFilter === "all" || risk === riskFilter;
+                return matchName && matchRisk;
+            });
+            renderCriminals(filtered);
+        }
+
+        function renderCriminals(criminals) {
+            const container = document.getElementById("criminal-list");
+            if (criminals.length === 0) {
+                container.innerHTML = '<p class="text-neutral-400 text-center py-12 col-span-full">No criminals found.</p>';
+                return;
+            }
+            container.innerHTML = criminals.map(c => {
+                const safeName = (c.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const safeDesc = (c.description || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const risk = getRiskLevel(c.weapon_detections);
+                return `
+                <div class="bg-neutral-900 rounded-3xl overflow-hidden group border ${risk.level === 'high' ? 'border-red-500/30' : risk.level === 'med' ? 'border-orange-500/20' : 'border-neutral-800'} hover:border-neutral-700 transition">
+                    <div class="relative">
+                        <img src="${API}${c.image_path}" class="w-full h-56 object-cover"
+                             onerror="this.src='https://via.placeholder.com/400x300/1a1a1a/555?text=No+Image'">
+                        <div class="absolute top-3 left-3">
+                            <span class="text-xs font-mono font-bold px-3 py-1 rounded-full ${risk.cls}"
+                                  style="${risk.level === 'none' ? 'display:none' : ''}">
+                                ${risk.level === 'high' ? '🚨 ' : risk.level === 'med' ? '⚠️ ' : ''}${risk.label}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <h3 class="text-xl font-semibold">${c.name}</h3>
+                        </div>
+                        <p class="text-neutral-400 text-sm line-clamp-2">${c.description || "No description"}</p>
+                        <div class="flex items-center gap-3 mt-3 text-xs text-neutral-500">
+                            <span><i class="fa-regular fa-calendar mr-1"></i>${c.added_at ? new Date(c.added_at).toLocaleDateString() : 'Unknown'}</span>
+                            ${(c.weapon_detections || 0) > 0 ? `<span class="text-red-400"><i class="fa-solid fa-gun mr-1"></i>${c.weapon_detections} weapon alert${c.weapon_detections>1?'s':''}</span>` : ''}
+                        </div>
+                        <div class="flex gap-3 mt-5 opacity-0 group-hover:opacity-100 transition-all">
+                            <button onclick="editCriminal('${c.id}', '${safeName}', '${safeDesc}')"
+                                    class="flex-1 bg-neutral-800 hover:bg-neutral-700 py-3 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition">
+                                <i class="fa-solid fa-edit"></i> Edit
+                            </button>
+                            <button onclick="deleteCriminal('${c.id}')"
+                                    class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-3 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition">
+                                <i class="fa-solid fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        document.getElementById("search-input").addEventListener("input", applyFilters);
+        document.getElementById("risk-filter").addEventListener("change", applyFilters);
+
+        function editCriminal(id, name, description) {
+            document.getElementById("edit-id").value = id;
+            document.getElementById("edit-name").value = name;
+            document.getElementById("edit-desc").value = description;
+            document.getElementById("edit-error").classList.add("hidden");
+            document.getElementById("edit-modal").classList.remove("hidden");
+        }
+
+        function closeModal() { document.getElementById("edit-modal").classList.add("hidden"); }
+
+        document.getElementById("edit-modal").addEventListener("click", (e) => {
+            if (e.target.id === "edit-modal") closeModal();
+        });
+
+        async function saveEdit() {
+            const id = document.getElementById("edit-id").value;
+            const newName = document.getElementById("edit-name").value.trim();
+            const newDesc = document.getElementById("edit-desc").value.trim();
+            const errorEl = document.getElementById("edit-error");
+            errorEl.classList.add("hidden");
+            if (!newName) {
+                errorEl.textContent = "Name cannot be empty!";
+                errorEl.classList.remove("hidden");
+                return;
+            }
+            const btn = document.getElementById("save-btn");
+            btn.disabled = true; btn.textContent = "Saving...";
+            try {
+                const res = await fetch(API + `/criminals/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: newName, description: newDesc })
+                });
+                if (res.ok) { closeModal(); loadCriminals(); }
+                else {
+                    const data = await res.json();
+                    errorEl.textContent = data.detail || "Failed to save";
+                    errorEl.classList.remove("hidden");
+                }
+            } catch (e) {
+                errorEl.textContent = "Error saving. Check server connection.";
+                errorEl.classList.remove("hidden");
+            } finally {
+                btn.disabled = false; btn.textContent = "Save Changes";
+            }
+        }
+
+        async function deleteCriminal(id) {
+            if (!confirm("Delete this criminal record permanently?")) return;
+            try {
+                const res = await fetch(API + `/criminals/${id}`, { method: "DELETE" });
+                if (res.ok) loadCriminals();
+                else alert("Failed to delete");
+            } catch (e) { alert("Error deleting. Check server connection."); }
+        }
+
+        setInterval(loadCriminals, 10000);
+        window.onload = loadCriminals;
+    </script>
+</body>
+</html>

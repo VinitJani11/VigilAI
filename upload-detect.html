@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Detection - VigilAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        #video-container { position: relative; background: black; border-radius: 1.5rem; overflow: hidden; }
+        #overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
+    </style>
+</head>
+<body class="bg-neutral-950 text-white">
+<div class="max-w-6xl mx-auto p-8">
+    <a href="/" class="inline-flex items-center gap-2 text-cyan-400 mb-8">
+        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+    </a>
+    <h1 class="text-4xl font-bold mb-2">Upload Detection</h1>
+    <p class="text-neutral-400 mb-10">Analyse images or videos for weapons and criminal faces</p>
+
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()"
+         class="border-2 border-dashed border-neutral-700 rounded-3xl p-12 text-center cursor-pointer hover:border-cyan-500 transition">
+        <i class="fa-solid fa-cloud-arrow-up text-5xl text-neutral-500 mb-4"></i>
+        <p class="text-xl font-semibold">Drop image or video here</p>
+        <p class="text-neutral-500 mt-2">Supports JPG, PNG, MP4, MOV</p>
+        <input id="file-input" type="file" accept="image/*,video/*" class="hidden" onchange="handleFile(this.files[0])">
+    </div>
+
+    <div id="file-preview" class="hidden mt-6 bg-neutral-900 rounded-3xl p-6">
+        <div class="flex items-center gap-4">
+            <i id="file-icon" class="fa-solid fa-file text-3xl"></i>
+            <div class="flex-1">
+                <p id="file-name" class="font-semibold"></p>
+                <p id="file-size" class="text-sm text-neutral-400"></p>
+            </div>
+            <button onclick="clearFile()" class="text-red-400 text-2xl hover:text-red-300">&#10005;</button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+        <div class="bg-neutral-900 rounded-3xl p-6">
+            <h3 class="font-semibold mb-3">Confidence Threshold</h3>
+            <input type="range" id="confidence-slider" min="0.10" max="0.80" step="0.01" value="0.35"
+                   class="w-full accent-cyan-500" oninput="updateConfidence(this.value)">
+            <div class="flex justify-between text-sm text-neutral-400 mt-1">
+                <span>0.10</span>
+                <span id="conf-value" class="font-mono font-semibold">0.35</span>
+                <span>0.80</span>
+            </div>
+        </div>
+        <div class="bg-neutral-900 rounded-3xl p-6">
+            <h3 class="font-semibold mb-4">Detection Options</h3>
+            <label class="flex items-center gap-3 mb-3 cursor-pointer">
+                <input type="checkbox" id="opt-yolo" checked class="w-5 h-5 accent-cyan-500">
+                <span>YOLO Weapon Detection</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="opt-criminal" checked class="w-5 h-5 accent-cyan-500">
+                <span>Criminal Face Match</span>
+            </label>
+        </div>
+    </div>
+
+    <button onclick="runDetection()" class="w-full mt-8 bg-cyan-500 hover:bg-cyan-400 text-black py-6 rounded-3xl font-bold text-xl transition">
+        Run Detection
+    </button>
+
+    <div id="progress" class="hidden mt-8 bg-neutral-900 rounded-3xl p-8 text-center">
+        <i class="fa-solid fa-spinner fa-spin text-4xl text-cyan-400 mb-4"></i>
+        <p id="progress-text" class="text-xl">Processing...</p>
+    </div>
+
+    <div id="image-results" class="hidden mt-10"></div>
+
+    <div id="live-video" class="hidden mt-10">
+        <h2 class="text-2xl font-bold mb-4">Live Video Detection</h2>
+        <div id="video-container">
+            <video id="video-player" controls class="w-full"></video>
+            <canvas id="overlay"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = "http://127.0.0.1:8000";
+    let selectedFile = null;
+    let fileType = null;
+
+    function updateConfidence(value) { document.getElementById("conf-value").textContent = parseFloat(value).toFixed(2); }
+
+    function handleFile(file) {
+        if (!file) return;
+        selectedFile = file;
+        fileType = file.type.startsWith("video") ? "video" : "image";
+        document.getElementById("file-name").textContent = file.name;
+        document.getElementById("file-size").textContent = (file.size / (1024*1024)).toFixed(2) + " MB";
+        document.getElementById("file-icon").className = fileType === "video"
+            ? "fa-solid fa-film text-3xl text-violet-400"
+            : "fa-solid fa-image text-3xl text-cyan-400";
+        document.getElementById("file-preview").classList.remove("hidden");
+        document.getElementById("image-results").classList.add("hidden");
+        document.getElementById("live-video").classList.add("hidden");
+    }
+
+    function clearFile() {
+        selectedFile = null;
+        document.getElementById("file-preview").classList.add("hidden");
+        document.getElementById("image-results").classList.add("hidden");
+        document.getElementById("live-video").classList.add("hidden");
+    }
+
+    async function runDetection() {
+        if (!selectedFile) return alert("Please select a file first");
+        const yolo = document.getElementById("opt-yolo").checked;
+        const criminal = document.getElementById("opt-criminal").checked;
+        const confidence = parseFloat(document.getElementById("confidence-slider").value);
+        if (!yolo && !criminal) return alert("Please enable at least one detection option");
+
+        document.getElementById("progress").classList.remove("hidden");
+        document.getElementById("progress-text").textContent = fileType === "video" ? "Starting live video detection..." : "Processing image...";
+
+        if (fileType === "image") {
+            const form = new FormData();
+            form.append("file", selectedFile);
+            form.append("confidence", confidence);
+            form.append("check_criminals", criminal);
+            form.append("yolo_enabled", yolo);
+            try {
+                const res = await fetch(API + "/detect-image-upload", { method: "POST", body: form });
+                if (!res.ok) throw new Error("Server error: " + res.status);
+                const data = await res.json();
+                showImageResults(data);
+            } catch (e) {
+                alert("Image detection failed: " + e.message);
+            } finally {
+                document.getElementById("progress").classList.add("hidden");
+            }
+        } else {
+            document.getElementById("progress").classList.add("hidden");
+            startLiveVideoDetection(confidence);
+        }
+    }
+
+    function showImageResults(data) {
+        const container = document.getElementById("image-results");
+        container.classList.remove("hidden");
+        let criminalHTML = data.criminal_match ? `
+            <div class="mb-6 bg-amber-600/20 border border-amber-500 text-amber-400 p-6 rounded-3xl text-center text-2xl font-semibold">
+                CRIMINAL MATCH: ${data.criminal_match.name} (${(data.criminal_match.similarity * 100).toFixed(0)}%)
+            </div>` : '';
+        let detectionsHTML = (data.detections || []).map(d => `
+            <div class="flex justify-between bg-neutral-800 rounded-2xl px-5 py-3">
+                <span class="capitalize">${d.class}</span>
+                <span class="font-mono">${(d.confidence*100).toFixed(0)}%</span>
+            </div>`).join('');
+        container.innerHTML = `
+            <h2 class="text-2xl font-bold mb-6">Detection Results</h2>
+            ${criminalHTML}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-neutral-900 rounded-3xl overflow-hidden">
+                    <img src="${data.annotated_image}" class="w-full">
+                </div>
+                <div class="bg-neutral-900 rounded-3xl p-6">
+                    <h3 class="font-semibold mb-4">Detections</h3>
+                    <div class="space-y-2">${detectionsHTML || '<p class="text-neutral-400">No detections found</p>'}</div>
+                </div>
+            </div>`;
+    }
+
+    function startLiveVideoDetection(confidence) {
+        const video = document.getElementById("video-player");
+        const canvas = document.getElementById("overlay");
+        const ctx = canvas.getContext("2d");
+        document.getElementById("live-video").classList.remove("hidden");
+        video.src = URL.createObjectURL(selectedFile);
+        video.onloadedmetadata = () => { canvas.width = video.videoWidth; canvas.height = video.videoHeight; };
+        let interval = null;
+        video.onplay = () => {
+            if (interval) clearInterval(interval);
+            interval = setInterval(async () => {
+                if (video.paused || video.ended) return;
+                const temp = document.createElement("canvas");
+                temp.width = video.videoWidth; temp.height = video.videoHeight;
+                temp.getContext("2d").drawImage(video, 0, 0);
+                temp.toBlob(async (blob) => {
+                    const form = new FormData();
+                    form.append("file", blob);
+                    form.append("confidence", confidence);
+                    try {
+                        const res = await fetch(API + "/detect", { method: "POST", body: form });
+                        const data = await res.json();
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        (data.detections || []).forEach(det => {
+                            const [x, y, w, h] = det.bbox || [0,0,0,0];
+                            const cls = det.class.toLowerCase();
+                            ctx.strokeStyle = (cls.includes("face") || cls.includes("person")) ? "#22ff88" : "#ff3366";
+                            ctx.lineWidth = 5;
+                            ctx.strokeRect(x, y, w, h);
+                            ctx.fillStyle = "white";
+                            ctx.font = "bold 18px Arial";
+                            ctx.fillText(`${det.class} ${(det.confidence*100).toFixed(0)}%`, x, y - 10);
+                        });
+                    } catch (e) {}
+                }, "image/jpeg", 0.8);
+            }, 200);
+        };
+        video.onpause = () => clearInterval(interval);
+        video.onended = () => clearInterval(interval);
+    }
+</script>
+</body>
+</html>
