@@ -7,17 +7,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        video { display: block; }
+        canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
         .alert { animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .mode-btn-on  { background: #06b6d4; color: #000; }
         .mode-btn-off { background: #262626; color: #a3a3a3; }
         @keyframes logSlide { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
         .log-item { animation: logSlide 0.3s ease; }
-        .log-weapon  { border-left: 3px solid #ef4444; background: rgba(239,68,68,0.06); }
-        .log-match   { border-left: 3px solid #f59e0b; background: rgba(245,158,11,0.06); }
-        .log-autoadd { border-left: 3px solid #f97316; background: rgba(249,115,22,0.06); }
-        .log-manual  { border-left: 3px solid #06b6d4; background: rgba(6,182,212,0.06); }
     </style>
 </head>
 <body class="bg-neutral-950 text-white">
@@ -28,23 +25,18 @@
     </a>
     <h1 class="text-4xl font-bold mb-6">Live Detection</h1>
 
-    <!-- Two-column layout: controls + feed | alert log -->
     <div class="flex gap-6" style="align-items:flex-start;">
-
-        <!-- LEFT: controls + camera -->
         <div class="flex-1 min-w-0">
-
-            <!-- Mode Buttons -->
             <div class="bg-neutral-900 rounded-3xl p-6 mb-6">
                 <h3 class="text-lg font-semibold mb-4">Detection Modes</h3>
                 <div class="grid grid-cols-2 gap-4">
-                    <button id="btn-yolo" onclick="toggleYolo()"
+                    <button id="btn-yolo" onclick="toggleYolo()" 
                             class="mode-btn-on flex items-center justify-between px-5 py-4 rounded-2xl font-semibold transition-all">
                         <div class="flex items-center gap-3">
                             <i class="fa-solid fa-crosshairs text-xl"></i>
                             <div class="text-left">
                                 <div>YOLO Detection</div>
-                                <div class="text-xs font-normal mt-0.5 opacity-70">Knife &amp; Pistol</div>
+                                <div class="text-xs font-normal mt-0.5 opacity-70">Knife & Pistol</div>
                             </div>
                         </div>
                         <span id="yolo-status" class="text-sm font-mono bg-black/20 px-3 py-1 rounded-xl">ON</span>
@@ -63,7 +55,6 @@
                 </div>
             </div>
 
-            <!-- Confidence Slider -->
             <div class="bg-neutral-900 rounded-3xl p-5 mb-6">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="font-semibold">Confidence Threshold</h3>
@@ -72,7 +63,6 @@
                 <input type="range" id="confidence-slider" min="0.10" max="0.80" step="0.01" value="0.30" class="w-full accent-cyan-500">
             </div>
 
-            <!-- Camera Feed -->
             <div class="relative bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl mb-4">
                 <video id="video" autoplay playsinline class="w-full"></video>
                 <canvas id="canvas"></canvas>
@@ -81,14 +71,12 @@
                 </div>
             </div>
 
-            <!-- Alerts -->
             <div id="weapon-alert" class="hidden mb-4 bg-red-600/20 border border-red-500 text-red-400 p-5 rounded-2xl text-center font-semibold text-lg alert">
                 <i class="fa-solid fa-triangle-exclamation mr-2"></i>WEAPON DETECTED! Screenshot saved.
             </div>
             <div id="criminal-alert" class="hidden mb-4 bg-amber-600/20 border border-amber-500 text-amber-400 p-5 rounded-2xl text-center font-semibold text-xl alert"></div>
             <div id="auto-add-alert" class="hidden mb-4 bg-orange-600/20 border border-orange-500 text-orange-400 p-5 rounded-2xl text-center font-semibold alert"></div>
 
-            <!-- Buttons -->
             <div class="flex gap-4 mt-2">
                 <button onclick="startCamera()" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black py-5 rounded-2xl font-semibold text-lg transition">
                     <i class="fa-solid fa-video mr-2"></i> Start Camera
@@ -97,6 +85,7 @@
                     <i class="fa-solid fa-stop mr-2"></i> Stop Camera
                 </button>
             </div>
+
             <div class="flex gap-4 mt-3">
                 <button onclick="manualCapture()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-3.5 rounded-2xl font-semibold transition">
                     <i class="fa-solid fa-camera mr-2"></i> Manual Screenshot
@@ -107,7 +96,6 @@
             </div>
         </div>
 
-        <!-- RIGHT: Alert Log Sidebar -->
         <div style="width:300px;flex-shrink:0;">
             <div class="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden" style="position:sticky;top:24px;">
                 <div class="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
@@ -119,21 +107,19 @@
                         <button onclick="clearLog()" class="text-neutral-500 hover:text-neutral-300 text-xs transition">Clear</button>
                     </div>
                 </div>
-                <div id="alert-log" class="overflow-y-auto text-sm" style="max-height:520px;">
-                    <p class="text-neutral-600 text-center py-10 px-4 text-xs">Events will appear here when weapons or criminals are detected</p>
-                </div>
+                <div id="alert-log" class="overflow-y-auto text-sm" style="max-height:520px;"></div>
                 <div class="px-5 py-3 border-t border-neutral-800 text-xs text-neutral-600 text-center">Last 20 events</div>
             </div>
         </div>
-
     </div>
 </div>
 
 <script>
-    const API = "http://127.0.0.1:8000";
-    const video  = document.getElementById("video");
+    const API = window.location.origin;
+    const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
-    const ctx    = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
+
     let stream = null;
     let interval = null;
     let currentConfidence = 0.30;
@@ -141,8 +127,21 @@
     let criminalCheckEnabled = true;
     let autoAddCooldown = false;
     let lastWeaponTime = 0;
+    let isCameraRunning = false;
+    let isStartingCamera = false;
+    let isProcessing = false;
+    let animationFrame = null;
+    let screenshotInFlight = false;
+    let criminalCheckInFlight = false;
+    let lastCriminalCheckTime = 0;
 
-    // Alert log state
+    let persistentDetections = [];
+    const PERSIST_TIME = 2500;
+    let lastDetectionTime = 0;
+    const DETECTION_COOLDOWN = 650;
+    let lastScreenshotTime = 0;
+    const SCREENSHOT_COOLDOWN = 3000;
+    const CRIMINAL_CHECK_COOLDOWN = 1500;
     let alertEvents = [];
 
     function addAlert(type, message, detail) {
@@ -161,16 +160,20 @@
             return;
         }
         container.innerHTML = alertEvents.map(e => {
-            const icons = { weapon: "fa-triangle-exclamation text-red-400", match: "fa-face-viewfinder text-amber-400", autoadd: "fa-user-plus text-orange-400", manual: "fa-camera text-cyan-400" };
-            return `
-            <div class="log-item log-${e.type} px-4 py-3 border-b border-neutral-800/50">
+            const icons = { 
+                weapon: "fa-triangle-exclamation text-red-400", 
+                match: "fa-face-viewfinder text-amber-400", 
+                autoadd: "fa-user-plus text-orange-400", 
+                manual: "fa-camera text-cyan-400" 
+            };
+            return `<div class="log-item log-${e.type} px-4 py-3 border-b border-neutral-800/50">
                 <div class="flex items-start gap-2">
                     <i class="fa-solid ${icons[e.type] || 'fa-bell text-neutral-400'} mt-0.5 text-xs flex-shrink-0"></i>
                     <div class="flex-1 min-w-0">
                         <div class="font-semibold text-xs leading-tight">${e.message}</div>
                         ${e.detail ? `<div class="text-neutral-500 text-xs mt-0.5 truncate">${e.detail}</div>` : ''}
                     </div>
-                    <div class="text-neutral-600 text-xs flex-shrink-0 font-mono">${e.timeStr}</div>
+                    <div class="text-neutral-600 text-xs font-mono">${e.timeStr}</div>
                 </div>
             </div>`;
         }).join('');
@@ -184,13 +187,15 @@
 
     function toggleYolo() {
         yoloEnabled = !yoloEnabled;
-        document.getElementById("btn-yolo").className = (yoloEnabled ? "mode-btn-on" : "mode-btn-off") + " flex items-center justify-between px-5 py-4 rounded-2xl font-semibold transition-all";
+        const btn = document.getElementById("btn-yolo");
+        btn.className = (yoloEnabled ? "mode-btn-on" : "mode-btn-off") + " flex items-center justify-between px-5 py-4 rounded-2xl font-semibold transition-all";
         document.getElementById("yolo-status").textContent = yoloEnabled ? "ON" : "OFF";
     }
 
     function toggleCriminalCheck() {
         criminalCheckEnabled = !criminalCheckEnabled;
-        document.getElementById("btn-criminal").className = (criminalCheckEnabled ? "mode-btn-on" : "mode-btn-off") + " flex items-center justify-between px-5 py-4 rounded-2xl font-semibold transition-all";
+        const btn = document.getElementById("btn-criminal");
+        btn.className = (criminalCheckEnabled ? "mode-btn-on" : "mode-btn-off") + " flex items-center justify-between px-5 py-4 rounded-2xl font-semibold transition-all";
         document.getElementById("criminal-status").textContent = criminalCheckEnabled ? "ON" : "OFF";
     }
 
@@ -201,89 +206,199 @@
 
     async function startCamera() {
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (isCameraRunning || isStartingCamera) {
+                addAlert("manual", "Camera already running", "Live feed is active");
+                return;
+            }
+            isStartingCamera = true;
+
+            if (interval) {
+                clearInterval(interval);
+                interval = null;
+            }
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
             video.srcObject = stream;
-            video.onloadedmetadata = () => {
+            video.onloadedmetadata = async () => {
+                await video.play();
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 document.getElementById("camera-status").classList.remove("hidden");
-                interval = setInterval(detectFrame, 350);
+                isCameraRunning = true;
+                isStartingCamera = false;
+                isProcessing = false;
+                persistentDetections = [];
+                lastDetectionTime = 0;
+                drawLoop();
+                interval = setInterval(detectFrame, 200);
                 addAlert("manual", "Camera started", "Live feed active");
             };
         } catch (err) {
+            isStartingCamera = false;
             alert("Camera access failed. Please allow camera permission.");
         }
     }
 
     function stopCamera() {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        if (interval) clearInterval(interval);
+        isCameraRunning = false;
+        isStartingCamera = false;
+        isProcessing = false;
+        screenshotInFlight = false;
+        criminalCheckInFlight = false;
+        if (interval) {
+            clearInterval(interval);
+            interval = null;
+        }
+        if (animationFrame) {
+            cancelAnimationFrame(animationFrame);
+            animationFrame = null;
+        }
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+        }
+        video.srcObject = null;
+        persistentDetections = [];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         document.getElementById("camera-status").classList.add("hidden");
-        addAlert("manual", "Camera stopped", null);
+    }
+
+    function drawLoop() {
+        if (!isCameraRunning) return;
+        drawPersistentDetections();
+        animationFrame = requestAnimationFrame(drawLoop);
+    }
+
+    function getAverageBrightness(context, w, h) {
+        const data = context.getImageData(0, 0, w, h).data;
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i+1] + data[i+2]) / 3;
+        return sum / (w * h);
     }
 
     async function detectFrame() {
-        if (!video.videoWidth) return;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0);
-        if (!yoloEnabled && !criminalCheckEnabled) return;
+        if (!isCameraRunning || isProcessing || !video.videoWidth) return;
 
+        isProcessing = true;
+
+        if (!yoloEnabled && !criminalCheckEnabled) {
+            isProcessing = false;
+            return;
+        }
+
+        const now = Date.now();
+        if (now - lastDetectionTime < DETECTION_COOLDOWN) {
+            drawPersistentDetections();
+            isProcessing = false;
+            return;
+        }
+        
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = video.videoWidth;
         tempCanvas.height = video.videoHeight;
-        tempCanvas.getContext("2d").drawImage(video, 0, 0);
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx.drawImage(video, 0, 0);
 
-        if (yoloEnabled) {
-            tempCanvas.toBlob(async (blob) => {
-                const form = new FormData();
-                form.append("file", blob, "frame.jpg");
-                try {
-                    const res = await fetch(`${API}/detect?confidence=${currentConfidence}`, { method: "POST", body: form });
-                    const data = await res.json();
-                    const detections = data.detections || [];
-                    let hasWeapon = false;
-                    let bestFace = null;
+        if (getAverageBrightness(tempCtx, tempCanvas.width, tempCanvas.height) < 18) {
+            drawPersistentDetections();
+            isProcessing = false;
+            return;
+        }
 
-                    detections.forEach(det => {
-                        const cls = det.class.toLowerCase();
-                        const [x, y, w, h] = det.bbox || [0, 0, 0, 0];
-                        ctx.strokeStyle = (cls.includes("face") || cls.includes("person")) ? "#22ff88" : "#ff3366";
-                        ctx.lineWidth = 6;
-                        ctx.strokeRect(x, y, w, h);
-                        ctx.fillStyle = "white";
-                        ctx.font = "bold 20px Arial";
-                        ctx.fillText(`${det.class} ${(det.confidence * 100).toFixed(0)}%`, x, y - 10);
-                        if (cls.includes("knife") || cls.includes("pistol") || cls.includes("gun")) hasWeapon = true;
-                        if ((cls.includes("face") || cls.includes("person")) && det.confidence > 0.55) {
-                            if (!bestFace || det.confidence > bestFace.confidence)
-                                bestFace = { bbox: [x, y, w, h], confidence: det.confidence };
-                        }
-                    });
+        lastDetectionTime = now;
 
-                    if (hasWeapon) {
-                        lastWeaponTime = Date.now();
-                        document.getElementById("weapon-alert").classList.remove("hidden");
-                        setTimeout(() => document.getElementById("weapon-alert").classList.add("hidden"), 3000);
-                        captureScreenshot();
-                        const weaponNames = detections.filter(d => /knife|pistol|gun/.test(d.class)).map(d => d.class).join(", ");
+        tempCanvas.toBlob(async (blob) => {
+            if (!blob) { isProcessing = false; return; }
+            
+            const form = new FormData();
+            form.append("file", blob, "frame.jpg");
+
+            try {
+                const res = await fetch(`${API}/detect?confidence=${currentConfidence}`, { method: "POST", body: form });
+                if (!res.ok) throw new Error("API error");
+                
+                const data = await res.json();
+                const detections = data.detections || [];
+
+                persistentDetections = detections.map(det => ({ ...det, timestamp: Date.now() }));
+                drawPersistentDetections();
+
+                let hasWeapon = false;
+                let bestFace = null;
+
+                detections.forEach(det => {
+                    const cls = det.class.toLowerCase();
+                    if (cls.includes("knife") || cls.includes("pistol") || cls.includes("gun")) hasWeapon = true;
+                    if ((cls.includes("face") || cls.includes("person")) && det.confidence > 0.55) {
+                        if (!bestFace || det.confidence > bestFace.confidence) 
+                            bestFace = { bbox: det.bbox, confidence: det.confidence };
+                    }
+                });
+
+                if (hasWeapon) {
+                    lastWeaponTime = Date.now();
+                    document.getElementById("weapon-alert").classList.remove("hidden");
+                    setTimeout(() => document.getElementById("weapon-alert").classList.add("hidden"), 4000);
+
+                    captureScreenshot();
+                    const weaponNames = detections.filter(d => /knife|pistol|gun/.test(d.class.toLowerCase()))
+                                                  .map(d => d.class).join(", ");
+                    if (Date.now() - lastScreenshotTime < 500) {
                         addAlert("weapon", "WEAPON DETECTED", weaponNames + " · screenshot saved");
-                        if (bestFace && !autoAddCooldown) {
-                            autoAddCooldown = true;
-                            autoAddCriminal(bestFace.bbox);
-                            setTimeout(() => { autoAddCooldown = false; }, 25000);
-                        }
                     }
 
-                    if (criminalCheckEnabled && bestFace) checkCriminalMatch(bestFace.bbox);
-                } catch (e) { console.error("Detection error:", e); }
-            }, "image/jpeg", 0.9);
-        } else if (criminalCheckEnabled) {
-            checkCriminalMatch([
-                Math.floor(video.videoWidth * 0.15), Math.floor(video.videoHeight * 0.15),
-                Math.floor(video.videoWidth * 0.7), Math.floor(video.videoHeight * 0.7)
-            ]);
+                    if (bestFace && !autoAddCooldown) {
+                        autoAddCooldown = true;
+                        autoAddCriminal(bestFace.bbox);
+                        setTimeout(() => autoAddCooldown = false, 25000);
+                    }
+                }
+
+                if (criminalCheckEnabled && bestFace && !criminalCheckInFlight && Date.now() - lastCriminalCheckTime > CRIMINAL_CHECK_COOLDOWN) {
+                    lastCriminalCheckTime = Date.now();
+                    criminalCheckInFlight = true;
+                    checkCriminalMatch(bestFace.bbox).finally(() => {
+                        criminalCheckInFlight = false;
+                    });
+                }
+            } catch (e) { 
+                console.error("Detection cycle failed:", e); 
+            } finally {
+                isProcessing = false;
+            }
+        }, "image/jpeg", 0.65);
+    }
+
+    function drawPersistentDetections() {
+        const now = Date.now();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = persistentDetections.length - 1; i >= 0; i--) {
+            const det = persistentDetections[i];
+            const age = now - det.timestamp;
+            if (age > PERSIST_TIME) {
+                persistentDetections.splice(i, 1);
+                continue;
+            }
+
+            const alpha = Math.max(0.25, 1 - (age / PERSIST_TIME));
+            const cls = det.class.toLowerCase();
+            const [x, y, w, h] = det.bbox || [0,0,0,0];
+
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = (cls.includes("face") || cls.includes("person")) ? "#22ff88" : "#ff3366";
+            ctx.lineWidth = 7;
+            ctx.strokeRect(x, y, w, h);
+
+            ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+            ctx.font = "bold 21px Arial";
+            ctx.fillText(`${det.class} ${(det.confidence*100).toFixed(0)}%`, x, y - 12);
         }
+        ctx.globalAlpha = 1;
     }
 
     async function autoAddCriminal(bbox) {
@@ -294,10 +409,12 @@
             const cropY = Math.max(0, y - padding);
             const cropW = Math.min(video.videoWidth - cropX, w + padding * 2);
             const cropH = Math.min(video.videoHeight - cropY, h + padding * 2);
+
             const tc = document.createElement("canvas");
             tc.width = cropW; tc.height = cropH;
             tc.getContext("2d").drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-            const imageBase64 = tc.toDataURL("image/jpeg", 0.97);
+
+            const imageBase64 = tc.toDataURL("image/jpeg", 0.90);
             const res = await fetch(API + "/auto-add-criminal", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -322,10 +439,12 @@
             const cropY = Math.max(0, y - padding);
             const cropW = Math.min(video.videoWidth - cropX, w + padding * 2);
             const cropH = Math.min(video.videoHeight - cropY, h + padding * 2);
+
             const tc = document.createElement("canvas");
             tc.width = cropW; tc.height = cropH;
             tc.getContext("2d").drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-            const imageBase64 = tc.toDataURL("image/jpeg", 0.95);
+
+            const imageBase64 = tc.toDataURL("image/jpeg", 0.90);
             const res = await fetch(API + "/check-match", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -339,7 +458,7 @@
                 alertEl.classList.remove("hidden");
                 setTimeout(() => alertEl.classList.add("hidden"), 7000);
                 addAlert("match", `MATCH: ${data.match.name}`, `${pct}% confidence`);
-                // If a weapon was seen in the last 10 seconds, increment weapon_detections for this criminal
+
                 if (data.match.criminal_id && (Date.now() - lastWeaponTime) < 10000) {
                     fetch(`${API}/criminals/${data.match.criminal_id}/weapon-detection`, { method: "POST" }).catch(() => {});
                 }
@@ -348,23 +467,43 @@
     }
 
     async function captureScreenshot() {
+        if (!video.videoWidth || screenshotInFlight) return false;
+
+        const now = Date.now();
+        if (now - lastScreenshotTime < SCREENSHOT_COOLDOWN) return false;
+
+        lastScreenshotTime = now;
+        screenshotInFlight = true;
+
         const tc = document.createElement("canvas");
-        tc.width = video.videoWidth; tc.height = video.videoHeight;
+        tc.width = video.videoWidth;
+        tc.height = video.videoHeight;
         tc.getContext("2d").drawImage(video, 0, 0);
+
         try {
             await fetch(API + "/capture-screenshot", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ image: tc.toDataURL("image/jpeg", 0.92) })
+                body: JSON.stringify({ image: tc.toDataURL("image/jpeg", 0.65) })
             });
-        } catch (e) {}
+            return true;
+        } catch (e) {
+            console.error("Screenshot failed", e);
+            return false;
+        } finally {
+            screenshotInFlight = false;
+        }
     }
 
     async function manualCapture() {
         if (!video.srcObject) return alert("Start the camera first!");
-        await captureScreenshot();
-        addAlert("manual", "Manual screenshot saved", null);
-        alert("Manual screenshot saved!");
+        const saved = await captureScreenshot();
+        if (saved) {
+            addAlert("manual", "Manual screenshot saved", null);
+            alert("Manual screenshot saved!");
+        } else {
+            alert("Please wait 3 seconds between screenshots.");
+        }
     }
 
     window.onbeforeunload = stopCamera;
