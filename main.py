@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,7 +37,6 @@ print("YOLO model loaded!")
 
 criminal_encodings = {}
 
-
 def load_criminal_encodings():
     global criminal_encodings
     criminal_encodings = {}
@@ -62,9 +61,18 @@ def load_criminal_encodings():
         print("Error loading criminals:", e)
     print(f"Total criminal faces loaded: {len(criminal_encodings)}")
 
-
 load_criminal_encodings()
 
+# ====================== BACKGROUND TASKS ======================
+
+def save_screenshot_task(file_path, image_data):
+    """Saves screenshots in the background to prevent camera freezing."""
+    try:
+        with open(file_path, "wb") as f:
+            f.write(base64.b64decode(image_data))
+        print(f"✅ [SYSTEM] Screenshot saved in background: {file_path}")
+    except Exception as e:
+        print(f"❌ [SYSTEM ERROR] Background save failed: {e}")
 
 # ====================== PAGES ======================
 @app.get("/", response_class=HTMLResponse)
@@ -72,42 +80,35 @@ async def dashboard():
     with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
 
-
 @app.get("/live-detection.html", response_class=HTMLResponse)
 async def live_detection():
     with open("live-detection.html", "r", encoding="utf-8") as f:
         return f.read()
-
 
 @app.get("/criminal-upload.html", response_class=HTMLResponse)
 async def criminal_upload():
     with open("criminal-upload.html", "r", encoding="utf-8") as f:
         return f.read()
 
-
 @app.get("/criminal-list.html", response_class=HTMLResponse)
 async def criminal_list():
     with open("criminal-list.html", "r", encoding="utf-8") as f:
         return f.read()
-
 
 @app.get("/detection-history.html", response_class=HTMLResponse)
 async def detection_history():
     with open("detection-history.html", "r", encoding="utf-8") as f:
         return f.read()
 
-
 @app.get("/upload-detect.html", response_class=HTMLResponse)
 async def upload_detect():
     with open("upload-detect.html", "r", encoding="utf-8") as f:
         return f.read()
 
-
 @app.get("/login.html", response_class=HTMLResponse)
 async def login_page():
     with open("login.html", "r", encoding="utf-8") as f:
         return f.read()
-
 
 # ====================== LOGIN ======================
 @app.post("/login")
@@ -117,13 +118,11 @@ async def login(request: Request):
         return {"message": "Login successful"}
     raise HTTPException(status_code=401, detail="Invalid username or password")
 
-
 # ====================== CRIMINALS CRUD ======================
 @app.get("/criminals")
 async def get_criminals():
     with open(CRIMINALS_FILE, "r") as f:
         return json.load(f)
-
 
 @app.post("/criminals")
 async def upload_criminal(
@@ -140,22 +139,19 @@ async def upload_criminal(
             shutil.copyfileobj(file.file, buffer)
         with open(CRIMINALS_FILE, "r") as f:
             criminals = json.load(f)
-        criminals.append(
-            {
-                "id": criminal_id,
-                "name": name,
-                "description": description or "No description",
-                "image_path": f"/criminals/{filename}",
-                "added_at": datetime.now().isoformat(),
-            }
-        )
+        criminals.append({
+            "id": criminal_id,
+            "name": name,
+            "description": description or "No description",
+            "image_path": f"/criminals/{filename}",
+            "added_at": datetime.now().isoformat(),
+        })
         with open(CRIMINALS_FILE, "w") as f:
             json.dump(criminals, f, indent=2)
         load_criminal_encodings()
         return {"message": "Uploaded successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Upload failed")
-
 
 @app.put("/criminals/{criminal_id}")
 async def update_criminal(criminal_id: str, request: Request):
@@ -180,7 +176,6 @@ async def update_criminal(criminal_id: str, request: Request):
     load_criminal_encodings()
     return {"message": "Updated successfully"}
 
-
 @app.delete("/criminals/{criminal_id}")
 async def delete_criminal(criminal_id: str):
     with open(CRIMINALS_FILE, "r") as f:
@@ -196,13 +191,20 @@ async def delete_criminal(criminal_id: str):
     load_criminal_encodings()
     return {"message": "Deleted"}
 
-
-# ====================== YOLO DETECTION ======================
+# ====================== FAST YOLO DETECTION (LIVE) ======================
 @app.post("/detect")
 async def detect(file: UploadFile = File(...), confidence: float = 0.15):
+    """Fast detection for live camera. No Explainability code here."""
     try:
         contents = await file.read()
         image = Image.open(BytesIO(contents)).convert("RGB")
+        np_img = np.array(image)
+
+        gray = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
+        if np.mean(gray) < 20:   
+            return {"detections": []}
+
+        # Predict without console clutter
         results = model(image, conf=confidence, verbose=False)
         detections = []
         for r in results:
@@ -210,18 +212,40 @@ async def detect(file: UploadFile = File(...), confidence: float = 0.15):
                 cls_id = int(box.cls)
                 cls_name = model.names.get(cls_id, f"class_{cls_id}").lower()
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                detections.append(
-                    {
-                        "class": cls_name,
-                        "confidence": float(box.conf),
-                        "bbox": [x1, y1, x2 - x1, y2 - y1],
-                    }
-                )
+                detections.append({
+                    "class": cls_name,
+                    "confidence": float(box.conf),
+                    "bbox": [x1, y1, x2 - x1, y2 - y1],
+                })
         return {"detections": detections}
     except Exception as e:
         print("Detect error:", e)
         return {"detections": []}
 
+# ====================== SCREENSHOTS (NON-BLOCKING) ======================
+@app.post("/capture-screenshot")
+async def capture_screenshot(request: Request, background_tasks: BackgroundTasks):
+    """Instantly returns success while saving the file in the background."""
+    try:
+        data = await request.json()
+        image_base64 = data.get("image")
+        if not image_base64:
+            return {"status": "error", "message": "No image"}
+        
+        if image_base64.startswith("data:image"):
+            image_base64 = image_base64.split(",")[1]
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"alert_{timestamp}_{uuid.uuid4().hex[:6]}.jpg"
+        file_path = os.path.join(SCREENSHOTS_DIR, filename)
+        
+        # 🔥 THE FIX: Use background task so the camera doesn't wait
+        background_tasks.add_task(save_screenshot_task, file_path, image_base64)
+        
+        return {"message": "Screenshot processing", "filename": filename}
+    except Exception as e:
+        print(f"Screenshot endpoint failed: {e}")
+        return {"status": "error", "message": str(e)}
 
 # ====================== IMAGE UPLOAD DETECTION ======================
 @app.post("/detect-image-upload")
@@ -248,25 +272,11 @@ async def detect_image_upload(
                     cls_name = model.names.get(cls_id, f"class_{cls_id}").lower()
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = float(box.conf)
-                    color = (
-                        (34, 255, 136)
-                        if ("face" in cls_name or "person" in cls_name)
-                        else (255, 51, 102)
-                    )
+                    color = ((34, 255, 136) if ("face" in cls_name or "person" in cls_name) else (255, 51, 102))
                     cv2.rectangle(draw_img, (x1, y1), (x2, y2), color, 4)
-                    cv2.putText(
-                        draw_img,
-                        f"{cls_name} {conf*100:.0f}%",
-                        (x1, y1 - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.8,
-                        (255, 255, 255),
-                        2,
-                    )
+                    cv2.putText(draw_img, f"{cls_name} {conf*100:.0f}%", (x1, y1 - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
                     detections.append({"class": cls_name, "confidence": conf})
-                    if (
-                        "face" in cls_name or "person" in cls_name
-                    ) and conf > best_face_conf:
+                    if ("face" in cls_name or "person" in cls_name) and conf > best_face_conf:
                         best_face_conf = conf
                         best_face_bbox = [x1, y1, x2 - x1, y2 - y1]
 
@@ -276,9 +286,7 @@ async def detect_image_upload(
             if best_face_bbox and yolo_enabled:
                 [fx, fy, fw, fh] = best_face_bbox
                 face_location = (fy, fx + fw, fy + fh, fx)
-                face_encs = face_recognition.face_encodings(
-                    np_img, known_face_locations=[face_location]
-                )
+                face_encs = face_recognition.face_encodings(np_img, known_face_locations=[face_location])
             if not face_encs:
                 face_encs = face_recognition.face_encodings(np_img)
             if face_encs:
@@ -286,9 +294,7 @@ async def detect_image_upload(
                 best_sim = 0
                 best_name = ""
                 for crim_id, crim_data in criminal_encodings.items():
-                    dist = face_recognition.face_distance(
-                        [crim_data["encoding"]], enc
-                    )[0]
+                    dist = face_recognition.face_distance([crim_data["encoding"]], enc)[0]
                     sim = 1 - dist
                     if sim > best_sim:
                         best_sim = sim
@@ -306,7 +312,6 @@ async def detect_image_upload(
     except Exception as e:
         print("Image upload error:", e)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # ====================== VIDEO UPLOAD DETECTION ======================
 @app.post("/detect-video-upload")
@@ -347,27 +352,13 @@ async def detect_video_upload(
                     cls_name = model.names.get(cls_id, f"class_{cls_id}").lower()
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = float(box.conf)
-                    color = (
-                        (34, 255, 136)
-                        if ("face" in cls_name or "person" in cls_name)
-                        else (255, 51, 102)
-                    )
+                    color = ((34, 255, 136) if ("face" in cls_name or "person" in cls_name) else (255, 51, 102))
                     cv2.rectangle(draw_frame, (x1, y1), (x2, y2), color, 3)
-                    cv2.putText(
-                        draw_frame,
-                        f"{cls_name} {conf*100:.0f}%",
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
+                    cv2.putText(draw_frame, f"{cls_name} {conf*100:.0f}%", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     detections.append({"class": cls_name, "confidence": conf})
                     if "knife" in cls_name or "pistol" in cls_name or "gun" in cls_name:
                         summary["weapons_found"] += 1
-                    if (
-                        "face" in cls_name or "person" in cls_name
-                    ) and conf > best_face_conf:
+                    if ("face" in cls_name or "person" in cls_name) and conf > best_face_conf:
                         best_face_conf = conf
                         best_face_bbox = [x1, y1, x2 - x1, y2 - y1]
             criminal_match = None
@@ -377,9 +368,7 @@ async def detect_video_upload(
                 if best_face_bbox:
                     [fx, fy, fw, fh] = best_face_bbox
                     face_location = (fy - 15, fx + fw + 15, fy + fh + 15, fx - 15)
-                    face_encs = face_recognition.face_encodings(
-                        np_frame, known_face_locations=[face_location]
-                    )
+                    face_encs = face_recognition.face_encodings(np_frame, known_face_locations=[face_location])
                 if not face_encs:
                     face_encs = face_recognition.face_encodings(np_frame)
                 if face_encs:
@@ -387,9 +376,7 @@ async def detect_video_upload(
                     best_sim = 0
                     best_name = ""
                     for crim_id, crim_data in criminal_encodings.items():
-                        dist = face_recognition.face_distance(
-                            [crim_data["encoding"]], enc
-                        )[0]
+                        dist = face_recognition.face_distance([crim_data["encoding"]], enc)[0]
                         sim = 1 - dist
                         if sim > best_sim:
                             best_sim = sim
@@ -401,14 +388,12 @@ async def detect_video_upload(
                 timestamp_sec = frame_idx / fps
                 _, buffer = cv2.imencode(".jpg", draw_frame)
                 frame_b64 = base64.b64encode(buffer).decode("utf-8")
-                detection_frames.append(
-                    {
-                        "timestamp": f"{int(timestamp_sec // 60):02d}:{int(timestamp_sec % 60):02d}",
-                        "frame_image": f"data:image/jpeg;base64,{frame_b64}",
-                        "detections": detections,
-                        "criminal_match": criminal_match,
-                    }
-                )
+                detection_frames.append({
+                    "timestamp": f"{int(timestamp_sec // 60):02d}:{int(timestamp_sec % 60):02d}",
+                    "frame_image": f"data:image/jpeg;base64,{frame_b64}",
+                    "detections": detections,
+                    "criminal_match": criminal_match,
+                })
             frame_idx += 1
         cap.release()
         if os.path.exists(temp_path):
@@ -420,7 +405,6 @@ async def detect_video_upload(
             os.remove(temp_path)
         raise HTTPException(status_code=500, detail="Video processing failed.")
 
-
 # ====================== AUTO ADD CRIMINAL ======================
 @app.post("/auto-add-criminal")
 async def auto_add_criminal(request: Request):
@@ -429,20 +413,46 @@ async def auto_add_criminal(request: Request):
         image_base64 = data.get("image")
         if not image_base64:
             return {"message": "No image"}
+
         if image_base64.startswith("data:image"):
             image_base64 = image_base64.split(",")[1]
+
         image_bytes = base64.b64decode(image_base64)
         pil_image = Image.open(BytesIO(image_bytes)).convert("RGB")
         np_image = np.array(pil_image)
+
         face_encs = face_recognition.face_encodings(np_image)
         if not face_encs:
             return {"message": "No face found in image"}
+
         detected_encoding = face_encs[0]
+        best_sim = 0
+        best_crim_id = None
+        best_name = ""
         for crim_id, crim_data in criminal_encodings.items():
-            if (
-                1 - face_recognition.face_distance([crim_data["encoding"]], detected_encoding)[0]
-            ) > 0.50:
-                return {"message": "Already in database", "name": crim_data["name"]}
+            sim = 1 - face_recognition.face_distance([crim_data["encoding"]], detected_encoding)[0]
+            if sim > best_sim:
+                best_sim = sim
+                best_crim_id = crim_id
+                best_name = crim_data["name"]
+
+        if best_sim > 0.48:
+            with open(CRIMINALS_FILE, "r") as f:
+                criminals = json.load(f)
+            updated = False
+            new_count = 0
+            for c in criminals:
+                if c["id"] == best_crim_id:
+                    c["weapon_detections"] = c.get("weapon_detections", 0) + 1
+                    new_count = c["weapon_detections"]
+                    updated = True
+                    break
+            if updated:
+                with open(CRIMINALS_FILE, "w") as f:
+                    json.dump(criminals, f, indent=2)
+                load_criminal_encodings()
+            return {"message": f"Updated weapon count for known criminal: {best_name}", "weapon_detections": new_count}
+
         criminal_id = str(uuid.uuid4())[:8]
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{criminal_id}_auto_weapon_{timestamp}.jpg"
@@ -452,24 +462,21 @@ async def auto_add_criminal(request: Request):
         with open(CRIMINALS_FILE, "r") as f:
             criminals = json.load(f)
         name = f"Auto-Added #{len(criminals)+1} - Weapon Alert"
-        criminals.append(
-            {
-                "id": criminal_id,
-                "name": name,
-                "description": f"Auto-detected with weapon on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                "image_path": f"/criminals/{filename}",
-                "added_at": datetime.now().isoformat(),
-                "weapon_detections": 1,
-            }
-        )
+        criminals.append({
+            "id": criminal_id,
+            "name": name,
+            "description": f"Auto-detected with weapon on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "image_path": f"/criminals/{filename}",
+            "added_at": datetime.now().isoformat(),
+            "weapon_detections": 1
+        })
         with open(CRIMINALS_FILE, "w") as f:
             json.dump(criminals, f, indent=2)
         load_criminal_encodings()
         return {"message": "Added to criminal database", "name": name}
     except Exception as e:
         print("Auto-add error:", e)
-        return {"message": "Error"}
-
+        return {"message": "Error adding criminal"}
 
 # ====================== CRIMINAL MATCH ======================
 @app.post("/check-match")
@@ -492,9 +499,7 @@ async def check_match(request: Request):
         best_similarity = 0
         best_crim_id = None
         for crim_id, crim_data in criminal_encodings.items():
-            similarity = (
-                1 - face_recognition.face_distance([crim_data["encoding"]], detected_encoding)[0]
-            )
+            similarity = 1 - face_recognition.face_distance([crim_data["encoding"]], detected_encoding)[0]
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_crim_id = crim_id
@@ -512,13 +517,10 @@ async def check_match(request: Request):
                 logs = logs[:500]
                 with open(MATCH_LOG_FILE, "w") as f:
                     json.dump(logs, f, indent=2)
-            except Exception:
-                pass
+            except Exception: pass
             return {"match": best_match}
         return {"match": None}
-    except Exception as e:
-        return {"match": None}
-
+    except Exception: return {"match": None}
 
 # ====================== WEAPON DETECTION INCREMENT ======================
 @app.post("/criminals/{criminal_id}/weapon-detection")
@@ -533,9 +535,7 @@ async def increment_weapon_detection(criminal_id: str):
         with open(CRIMINALS_FILE, "w") as f:
             json.dump(criminals, f, indent=2)
         return {"message": "Updated"}
-    except Exception:
-        return {"message": "Error"}
-
+    except Exception: return {"message": "Error"}
 
 # ====================== STATS ======================
 @app.get("/stats")
@@ -547,8 +547,7 @@ async def get_stats():
         try:
             with open(MATCH_LOG_FILE, "r") as f:
                 matches = json.load(f)
-        except Exception:
-            matches = []
+        except Exception: matches = []
         last_detection = None
         if screenshots:
             newest = max(screenshots, key=os.path.getmtime)
@@ -559,9 +558,7 @@ async def get_stats():
             "total_matches": len(matches),
             "last_detection": last_detection,
         }
-    except Exception:
-        return {"total_criminals": 0, "total_screenshots": 0, "total_matches": 0, "last_detection": None}
-
+    except Exception: return {"total_criminals": 0, "total_screenshots": 0, "total_matches": 0, "last_detection": None}
 
 # ====================== MATCH HISTORY ======================
 @app.get("/match-history")
@@ -569,29 +566,7 @@ async def get_match_history():
     try:
         with open(MATCH_LOG_FILE, "r") as f:
             return json.load(f)
-    except Exception:
-        return []
-
-
-# ====================== SCREENSHOTS ======================
-@app.post("/capture-screenshot")
-async def capture_screenshot(request: Request):
-    try:
-        data = await request.json()
-        image_base64 = data.get("image")
-        if not image_base64:
-            raise HTTPException(status_code=400, detail="No image")
-        if image_base64.startswith("data:image"):
-            image_base64 = image_base64.split(",")[1]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"alert_{timestamp}.jpg"
-        file_path = f"{SCREENSHOTS_DIR}/{filename}"
-        with open(file_path, "wb") as f:
-            f.write(base64.b64decode(image_base64))
-        return {"message": "Screenshot saved", "filename": filename}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    except Exception: return []
 
 @app.get("/screenshots")
 async def get_screenshots():
@@ -599,16 +574,13 @@ async def get_screenshots():
     image_files = glob.glob(f"{SCREENSHOTS_DIR}/*.jpg")
     for img in image_files:
         filename = os.path.basename(img)
-        screenshots.append(
-            {
-                "filename": filename,
-                "timestamp": datetime.fromtimestamp(os.path.getmtime(img)).isoformat(),
-                "detections": [],
-            }
-        )
+        screenshots.append({
+            "filename": filename,
+            "timestamp": datetime.fromtimestamp(os.path.getmtime(img)).isoformat(),
+            "detections": [],
+        })
     screenshots.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return screenshots
-
 
 @app.delete("/screenshots/{filename}")
 async def delete_screenshot(filename: str):
@@ -618,21 +590,17 @@ async def delete_screenshot(filename: str):
         return {"message": "Deleted"}
     raise HTTPException(status_code=404, detail="Screenshot not found")
 
-
-# ====================== EXPLAIN PAGE ======================
 @app.get("/explain.html", response_class=HTMLResponse)
 async def explain_page():
     with open("explain.html", "r", encoding="utf-8") as f:
         return f.read()
-
 
 @app.get("/match-history.html", response_class=HTMLResponse)
 async def match_history_page():
     with open("match-history.html", "r", encoding="utf-8") as f:
         return f.read()
 
-
-# ====================== EXPLAINABILITY: Grad-CAM + LIME ======================
+# ====================== EXPLAINABILITY (Grad-CAM + LIME) ======================
 @app.post("/explain-image")
 async def explain_image(
     file: UploadFile = File(...),
@@ -643,15 +611,14 @@ async def explain_image(
     do_lime: bool = Form(True),
     do_detection: bool = Form(True),
 ):
+    """Deep analysis for manual uploads only."""
     try:
         import scipy.ndimage as ndi
-
         contents = await file.read()
         pil_image = Image.open(BytesIO(contents)).convert("RGB")
         np_img = np.array(pil_image)
         h_orig, w_orig = np_img.shape[:2]
 
-        # ── 1. Run YOLO detections ──────────────────────────────────────────
         results = model(pil_image, conf=confidence, verbose=False)
         detections = []
         for r in results:
@@ -665,7 +632,6 @@ async def explain_image(
                     "bbox": [x1, y1, x2 - x1, y2 - y1],
                 })
 
-        # ── 2. Detection overlay image ──────────────────────────────────────
         detection_b64 = None
         if do_detection:
             det_img = np_img.copy()
@@ -682,8 +648,6 @@ async def explain_image(
             _, buf = cv2.imencode(".jpg", cv2.cvtColor(det_img, cv2.COLOR_RGB2BGR))
             detection_b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
 
-        # ── 3. Grad-CAM heatmap ─────────────────────────────────────────────
-        # Build a confidence-weighted detection heatmap (Score-CAM style for ONNX)
         gcam_b64 = None
         if do_gcam:
             heatmap = np.zeros((h_orig, w_orig), dtype=np.float32)
@@ -692,180 +656,77 @@ async def explain_image(
                     x, y, w, ww = det["bbox"]
                     conf = det["confidence"]
                     cx, cy = x + w // 2, y + ww // 2
-                    sx = max(w, 40) * 0.6
-                    sy = max(ww, 40) * 0.6
-                    # Gaussian blob weighted by confidence
+                    sx, sy = max(w, 40) * 0.6, max(ww, 40) * 0.6
                     yy_grid, xx_grid = np.ogrid[:h_orig, :w_orig]
                     gauss = np.exp(-0.5 * (((xx_grid - cx) / sx) ** 2 + ((yy_grid - cy) / sy) ** 2))
                     heatmap += gauss.astype(np.float32) * float(conf)
-                # Smooth and normalise
                 heatmap = ndi.gaussian_filter(heatmap, sigma=max(h_orig, w_orig) * 0.04)
-                heatmap = np.clip(heatmap, 0, None)
-                if heatmap.max() > 0:
-                    heatmap = heatmap / heatmap.max()
-            else:
-                # No detections — show flat low heatmap
-                heatmap[:] = 0.05
-
-            # Apply colormap
-            colormaps = {
-                "jet": cv2.COLORMAP_JET,
-                "hot": cv2.COLORMAP_HOT,
-                "plasma": cv2.COLORMAP_PLASMA,
-                "viridis": cv2.COLORMAP_VIRIDIS,
-            }
-            cmap = colormaps.get(gcam_style, cv2.COLORMAP_HOT)
-            heatmap_uint8 = (heatmap * 255).astype(np.uint8)
-            heatmap_color = cv2.applyColorMap(heatmap_uint8, cmap)
-            heatmap_color_rgb = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
-
-            # Blend with original image
-            alpha = 0.55
-            gcam_img = (alpha * heatmap_color_rgb.astype(np.float32) + (1 - alpha) * np_img.astype(np.float32))
-            gcam_img = np.clip(gcam_img, 0, 255).astype(np.uint8)
-
-            # Draw bounding boxes on top
+                if heatmap.max() > 0: heatmap = heatmap / heatmap.max()
+            else: heatmap[:] = 0.05
+            
+            cmap = {"jet": cv2.COLORMAP_JET, "hot": cv2.COLORMAP_HOT, "plasma": cv2.COLORMAP_PLASMA, "viridis": cv2.COLORMAP_VIRIDIS}.get(gcam_style, cv2.COLORMAP_HOT)
+            heatmap_color = cv2.applyColorMap((heatmap * 255).astype(np.uint8), cmap)
+            gcam_img = np.clip(0.55 * cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB) + 0.45 * np_img, 0, 255).astype(np.uint8)
             for det in detections:
                 x, y, w, ww = det["bbox"]
                 cv2.rectangle(gcam_img, (x, y), (x + w, y + ww), (255, 255, 255), 2)
-
-            # Colorbar strip
+            
             bar_w = max(30, w_orig // 20)
             bar = np.linspace(1, 0, h_orig).reshape(-1, 1)
-            bar_img = cv2.applyColorMap((bar * 255).astype(np.uint8), cmap)
-            bar_rgb = cv2.cvtColor(bar_img, cv2.COLOR_BGR2RGB)
-            bar_rgb = np.repeat(bar_rgb, bar_w, axis=1)
-            gcam_with_bar = np.hstack([gcam_img, bar_rgb])
-
-            _, buf = cv2.imencode(".jpg", cv2.cvtColor(gcam_with_bar, cv2.COLOR_RGB2BGR))
+            bar_rgb = np.repeat(cv2.cvtColor(cv2.applyColorMap((bar * 255).astype(np.uint8), cmap), cv2.COLOR_BGR2RGB), bar_w, axis=1)
+            _, buf = cv2.imencode(".jpg", cv2.cvtColor(np.hstack([gcam_img, bar_rgb]), cv2.COLOR_RGB2BGR))
             gcam_b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
 
-        # ── 4. LIME explanation ─────────────────────────────────────────────
         lime_b64 = None
         if do_lime:
             try:
                 from lime import lime_image
-                from skimage.segmentation import mark_boundaries, slic
-
-                # LIME prediction function: returns confidence scores per class
+                from skimage.segmentation import mark_boundaries
                 class_names = list(model.names.values())
                 n_classes = len(class_names)
-
                 def yolo_predict_lime(images):
                     scores = []
                     for img_arr in images:
-                        pil_i = Image.fromarray(img_arr.astype(np.uint8))
-                        res = model(pil_i, conf=0.05, verbose=False)
+                        res = model(Image.fromarray(img_arr.astype(np.uint8)), conf=0.05, verbose=False)
                         score_vec = np.zeros(n_classes, dtype=np.float32)
                         for r in res:
                             for box in r.boxes:
                                 cls_id = int(box.cls)
-                                conf_val = float(box.conf)
-                                if 0 <= cls_id < n_classes:
-                                    score_vec[cls_id] = max(score_vec[cls_id], conf_val)
-                        # If no detection, give small uniform score
-                        if score_vec.max() == 0:
-                            score_vec[:] = 0.01 / n_classes
+                                if 0 <= cls_id < n_classes: score_vec[cls_id] = max(score_vec[cls_id], float(box.conf))
+                        if score_vec.max() == 0: score_vec[:] = 0.01 / n_classes
                         scores.append(score_vec)
                     return np.array(scores)
 
-                # Resize image for LIME speed (max 320px side)
-                lime_size = 320
-                scale = min(lime_size / w_orig, lime_size / h_orig, 1.0)
-                lw = max(int(w_orig * scale), 64)
-                lh = max(int(h_orig * scale), 64)
-                lime_input = np.array(Image.fromarray(np_img).resize((lw, lh), Image.LANCZOS))
-
                 explainer = lime_image.LimeImageExplainer(random_state=42)
-                explanation = explainer.explain_instance(
-                    lime_input,
-                    yolo_predict_lime,
-                    top_labels=min(3, n_classes),
-                    hide_color=0,
-                    num_samples=lime_samples,
-                    batch_size=8,
-                    random_seed=42,
-                )
-
-                # Pick the top detected class, or first label
-                if detections:
-                    top_class_name = detections[0]["class"].lower()
-                    label_idx = next(
-                        (i for i, name in enumerate(class_names) if name.lower() == top_class_name),
-                        explanation.top_labels[0],
-                    )
-                else:
-                    label_idx = explanation.top_labels[0]
-
-                lime_img_arr, mask = explanation.get_image_and_mask(
-                    label_idx,
-                    positive_only=False,
-                    num_features=10,
-                    hide_rest=False,
-                    min_weight=0.0,
-                )
-
-                # Colorize LIME result
-                lime_display = mark_boundaries(
-                    lime_img_arr.astype(np.uint8),
-                    mask,
-                    color=(0, 1, 0),
-                    outline_color=(0, 0.8, 0),
-                )
-
-                # Overlay positive / negative regions
-                pos_mask = (mask == 1)
-                neg_mask = (mask == -1) if -1 in np.unique(mask) else np.zeros_like(pos_mask)
-
-                lime_colored = (lime_display * 255).astype(np.uint8).copy()
-                lime_colored[pos_mask] = (
-                    lime_colored[pos_mask] * 0.4 + np.array([0, 200, 80]) * 0.6
-                ).clip(0, 255).astype(np.uint8)
-                if neg_mask.any():
-                    lime_colored[neg_mask] = (
-                        lime_colored[neg_mask] * 0.4 + np.array([220, 40, 40]) * 0.6
-                    ).clip(0, 255).astype(np.uint8)
-
-                # Upscale back to original size
+                lime_input = np.array(Image.fromarray(np_img).resize((320, 320), Image.LANCZOS))
+                explanation = explainer.explain_instance(lime_input, yolo_predict_lime, top_labels=3, num_samples=lime_samples)
+                label_idx = next((i for i, name in enumerate(class_names) if name.lower() == detections[0]["class"].lower()), explanation.top_labels[0]) if detections else explanation.top_labels[0]
+                lime_img_arr, mask = explanation.get_image_and_mask(label_idx, positive_only=False, num_features=10, hide_rest=False)
+                
+                lime_colored = (mark_boundaries(lime_img_arr.astype(np.uint8), mask, color=(0, 1, 0)) * 255).astype(np.uint8)
+                lime_colored[mask == 1] = (lime_colored[mask == 1] * 0.4 + np.array([0, 200, 80]) * 0.6).astype(np.uint8)
+                if -1 in mask: lime_colored[mask == -1] = (lime_colored[mask == -1] * 0.4 + np.array([220, 40, 40]) * 0.6).astype(np.uint8)
+                
                 lime_full = np.array(Image.fromarray(lime_colored).resize((w_orig, h_orig), Image.LANCZOS))
-
-                # Legend
-                legend_h = 48
-                legend = np.zeros((legend_h, w_orig, 3), dtype=np.uint8)
+                legend = np.zeros((48, w_orig, 3), dtype=np.uint8)
                 legend[:] = (20, 20, 28)
                 cv2.rectangle(legend, (10, 10), (30, 38), (0, 200, 80), -1)
                 cv2.putText(legend, "Positive (helped)", (36, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
                 cv2.rectangle(legend, (220, 10), (240, 38), (220, 40, 40), -1)
                 cv2.putText(legend, "Negative (suppressed)", (246, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
-
-                lime_final = np.vstack([lime_full, legend])
-                _, buf = cv2.imencode(".jpg", cv2.cvtColor(lime_final, cv2.COLOR_RGB2BGR))
+                
+                _, buf = cv2.imencode(".jpg", cv2.cvtColor(np.vstack([lime_full, legend]), cv2.COLOR_RGB2BGR))
                 lime_b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
+            except Exception: lime_b64 = None
 
-            except ImportError:
-                lime_b64 = None
-                print("LIME not installed. Run: pip install lime scikit-image")
-            except Exception as le:
-                print(f"LIME error: {le}")
-                lime_b64 = None
-
-        return {
-            "detections": detections,
-            "detection_image": detection_b64,
-            "gcam_image": gcam_b64,
-            "lime_image": lime_b64,
-        }
-
+        return {"detections": detections, "detection_image": detection_b64, "gcam_image": gcam_b64, "lime_image": lime_b64}
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ====================== STATIC FILES (must be LAST) ======================
-# These must be mounted AFTER all API routes so API routes take priority
+# ====================== STATIC FILES ======================
 app.mount("/criminals", StaticFiles(directory="criminals"), name="criminals")
 app.mount("/screenshots", StaticFiles(directory="screenshots"), name="screenshots")
 
-print("VigilAI Running!")
-print("Open: http://127.0.0.1:8000")
+print("VigilAI Running! Open: http://127.0.0.1:8000")
