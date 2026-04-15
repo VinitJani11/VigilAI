@@ -8,7 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         #video-container { position: relative; background: black; border-radius: 1.5rem; overflow: hidden; }
-        #overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
+        #video-player { display: block; width: 100%; height: auto; }
+        #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     </style>
 </head>
 <body class="bg-neutral-950 text-white">
@@ -83,14 +84,19 @@
 </div>
 
 <script>
-    const API = "http://127.0.0.1:8000";
+    const API = window.location.origin;
     let selectedFile = null;
     let fileType = null;
+    let activeVideoDetectionCleanup = null;
 
     function updateConfidence(value) { document.getElementById("conf-value").textContent = parseFloat(value).toFixed(2); }
 
     function handleFile(file) {
         if (!file) return;
+        if (activeVideoDetectionCleanup) {
+            activeVideoDetectionCleanup();
+            activeVideoDetectionCleanup = null;
+        }
         selectedFile = file;
         fileType = file.type.startsWith("video") ? "video" : "image";
         document.getElementById("file-name").textContent = file.name;
@@ -104,6 +110,10 @@
     }
 
     function clearFile() {
+        if (activeVideoDetectionCleanup) {
+            activeVideoDetectionCleanup();
+            activeVideoDetectionCleanup = null;
+        }
         selectedFile = null;
         document.getElementById("file-preview").classList.add("hidden");
         document.getElementById("image-results").classList.add("hidden");
@@ -172,41 +182,132 @@
         const video = document.getElementById("video-player");
         const canvas = document.getElementById("overlay");
         const ctx = canvas.getContext("2d");
-        document.getElementById("live-video").classList.remove("hidden");
-        video.src = URL.createObjectURL(selectedFile);
-        video.onloadedmetadata = () => { canvas.width = video.videoWidth; canvas.height = video.videoHeight; };
         let interval = null;
+        let isProcessing = false;
+        let latestDetections = [];
+        let objectUrl = null;
+
+        if (activeVideoDetectionCleanup) {
+            activeVideoDetectionCleanup();
+            activeVideoDetectionCleanup = null;
+        }
+
+        function resizeOverlay() {
+            const rect = video.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.style.width = rect.width + "px";
+            canvas.style.height = rect.height + "px";
+            canvas.width = Math.round(rect.width * dpr);
+            canvas.height = Math.round(rect.height * dpr);
+            drawDetections();
+        }
+
+        function drawDetections() {
+            const rect = video.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const displayWidth = rect.width;
+            const displayHeight = rect.height;
+
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            if (!video.videoWidth || !video.videoHeight || !displayWidth || !displayHeight) return;
+
+            const scaleX = displayWidth / video.videoWidth;
+            const scaleY = displayHeight / video.videoHeight;
+
+            latestDetections.forEach(det => {
+                const [x, y, w, h] = det.bbox || [0,0,0,0];
+                const cls = det.class.toLowerCase();
+                const sx = x * scaleX;
+                const sy = y * scaleY;
+                const sw = w * scaleX;
+                const sh = h * scaleY;
+
+                ctx.strokeStyle = (cls.includes("face") || cls.includes("person")) ? "#22ff88" : "#ff3366";
+                ctx.lineWidth = Math.max(3, 5 * Math.min(scaleX, scaleY));
+                ctx.strokeRect(sx, sy, sw, sh);
+
+                ctx.fillStyle = "rgba(0,0,0,0.75)";
+                ctx.font = "bold 16px Arial";
+                const label = `${det.class} ${(det.confidence*100).toFixed(0)}%`;
+                const labelWidth = ctx.measureText(label).width + 12;
+                const labelY = Math.max(2, sy - 26);
+                ctx.fillRect(sx, labelY, labelWidth, 24);
+                ctx.fillStyle = "white";
+                ctx.fillText(label, sx + 6, labelY + 17);
+            });
+        }
+
+        function stopVideoDetection() {
+            if (interval) {
+                clearInterval(interval);
+                interval = null;
+            }
+            isProcessing = false;
+        }
+
+        function cleanupVideoDetection() {
+            stopVideoDetection();
+            latestDetections = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            window.removeEventListener("resize", resizeOverlay);
+            video.pause();
+            video.removeAttribute("src");
+            video.load();
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+                objectUrl = null;
+            }
+        }
+
+        activeVideoDetectionCleanup = cleanupVideoDetection;
+
+        document.getElementById("live-video").classList.remove("hidden");
+        objectUrl = URL.createObjectURL(selectedFile);
+        video.src = objectUrl;
+        video.onloadedmetadata = () => {
+            resizeOverlay();
+        };
+        video.onresize = resizeOverlay;
+        window.addEventListener("resize", resizeOverlay, { passive: true });
         video.onplay = () => {
-            if (interval) clearInterval(interval);
+            stopVideoDetection();
+            resizeOverlay();
             interval = setInterval(async () => {
-                if (video.paused || video.ended) return;
+                if (video.paused || video.ended || isProcessing || !video.videoWidth) return;
+                isProcessing = true;
                 const temp = document.createElement("canvas");
                 temp.width = video.videoWidth; temp.height = video.videoHeight;
                 temp.getContext("2d").drawImage(video, 0, 0);
                 temp.toBlob(async (blob) => {
+                    if (!blob) {
+                        isProcessing = false;
+                        return;
+                    }
                     const form = new FormData();
-                    form.append("file", blob);
-                    form.append("confidence", confidence);
+                    form.append("file", blob, "video-frame.jpg");
                     try {
-                        const res = await fetch(API + "/detect", { method: "POST", body: form });
+                        const res = await fetch(`${API}/detect?confidence=${confidence}`, { method: "POST", body: form });
                         const data = await res.json();
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        (data.detections || []).forEach(det => {
-                            const [x, y, w, h] = det.bbox || [0,0,0,0];
-                            const cls = det.class.toLowerCase();
-                            ctx.strokeStyle = (cls.includes("face") || cls.includes("person")) ? "#22ff88" : "#ff3366";
-                            ctx.lineWidth = 5;
-                            ctx.strokeRect(x, y, w, h);
-                            ctx.fillStyle = "white";
-                            ctx.font = "bold 18px Arial";
-                            ctx.fillText(`${det.class} ${(det.confidence*100).toFixed(0)}%`, x, y - 10);
-                        });
-                    } catch (e) {}
-                }, "image/jpeg", 0.8);
-            }, 200);
+                        latestDetections = data.detections || [];
+                        resizeOverlay();
+                    } catch (e) {
+                        latestDetections = [];
+                        drawDetections();
+                    } finally {
+                        isProcessing = false;
+                    }
+                }, "image/jpeg", 0.75);
+            }, 350);
         };
-        video.onpause = () => clearInterval(interval);
-        video.onended = () => clearInterval(interval);
+        video.onpause = stopVideoDetection;
+        video.onended = () => {
+            stopVideoDetection();
+            latestDetections = [];
+            drawDetections();
+        };
     }
 </script>
 </body>
